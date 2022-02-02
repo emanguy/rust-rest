@@ -19,3 +19,5 @@ Transfer/sec:    449.68KB
 ```
 
 Crazy that a majority of the requests responded in <100ms. When using my normal rest client with no load the server replies in <10ms.
+
+Additionally, a majority of the connection drop errors just happened because the OS couldn't keep up. There were some infrequent "too many open files" errors.
