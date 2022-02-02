@@ -1,0 +1,11 @@
+version: "3.0"
+
+services:
+  postgres-db:
+    image: "postgres:14-alpine"
+    environment:
+      POSTGRES_PASSWORD: sample123
+    ports:
+      - "5432:5432"
+    volumes:
+      - "./postgres-scripts:/docker-entrypoint-initdb.d"
