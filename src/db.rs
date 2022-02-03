@@ -1,6 +1,5 @@
-use std::time::Duration;
+use std::{time::Duration, fmt::Display, error::Error};
 
-use log::*;
 use serde::Serialize;
 use postgres::{Config, NoTls, Row};
 use r2d2_postgres::{PostgresConnectionManager, r2d2::{Pool, PooledConnection}};
@@ -27,8 +26,48 @@ pub struct NewUser {
     pub last_name: String,
 }
 
+pub struct TodoTask {
+    pub id: i32,
+    pub user_id: i32,
+    pub task_desc: String,
+}
+
+impl From<&Row> for TodoTask {
+    fn from(_: &Row) -> Self {
+        todo!()
+    }
+}
+
 pub type PgPool = Pool<PostgresConnectionManager<NoTls>>;
 pub type PgClient = PooledConnection<PostgresConnectionManager<NoTls>>;
+
+#[derive(Debug)]
+pub enum DbError {
+    QueryFailure(postgres::Error)
+}
+
+impl DbError {
+    fn generic(pg_err: postgres::Error) -> DbError {
+        Self::QueryFailure(pg_err)
+    }
+}
+
+impl Display for DbError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            &Self::QueryFailure(_) => write!(f, "Failed to execute query")
+        }
+    }
+}
+
+impl Error for DbError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            &Self::QueryFailure(ref pg_err) => Some(pg_err)
+        }
+    }
+}
+
 
 pub fn connect() -> PgPool {
     let mut pg_config = Config::new();
@@ -44,14 +83,22 @@ pub fn connect() -> PgPool {
         .build(cxn_manager).expect("Failed to build connection pool")
 }
 
-pub fn get_users(conn: &mut PgClient) -> Vec<TodoUser> {
-    let fetched_users = match conn.query("SELECT * FROM todo_user", &[]) {
-        Ok(rows) => rows.iter().map(TodoUser::from).collect::<Vec<TodoUser>>(),
-        Err(_) => {
-            error!("Failed to select on users");
-            return Vec::new();
-        }
-    };
+pub fn get_users(conn: &mut PgClient) -> Result<Vec<TodoUser>, DbError> {
+    let fetched_users = conn.query("SELECT * FROM todo_user", &[])
+        .map_err(DbError::generic)?
+        .iter()
+        .map(TodoUser::from)
+        .collect::<Vec<TodoUser>>();
 
-    fetched_users
+    Ok(fetched_users)
+}
+
+pub fn get_tasks_for_user(conn: &mut PgClient, user_id: i32) -> Result<Vec<TodoTask>, DbError> {
+    let fetched_tasks = conn.query("SELECT * FROM todo_task WHERE user_id = $1", &[&user_id])
+        .map_err(DbError::generic)?
+        .iter()
+        .map(TodoTask::from)
+        .collect::<Vec<TodoTask>>();
+
+    Ok(fetched_tasks)
 }

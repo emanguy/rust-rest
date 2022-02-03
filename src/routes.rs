@@ -27,6 +27,11 @@ pub async fn get_users(pg_pool: web::Data<PgPool>) -> impl Responder {
         Err(_) => return HttpResponse::InternalServerError().body("Failed to connect to database"),
     };
     let users = db::get_users(&mut db_cxn);
-
-    HttpResponse::Ok().json(users)
+    match users {
+        Ok(users) => HttpResponse::Ok().json(users),
+        Err(db_err) => {
+            error!("User retrieve failure: {}", db_err);
+            HttpResponse::InternalServerError().json("Failed to retrieve users")
+        },
+    }
 }
