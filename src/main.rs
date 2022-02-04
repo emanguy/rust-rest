@@ -8,7 +8,7 @@ mod db;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenv().ok();
+    dotenv().expect("Failed to initialize dotenv");
     env_logger::builder().filter_level(LevelFilter::Info).init();
     // let db_url = env::var("DATABASE_URL").expect("Could not get database URL from environment");    
 
