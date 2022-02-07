@@ -1,7 +1,7 @@
 use std::{time::Duration, fmt::Display, error::Error};
 
 use serde::Serialize;
-use postgres::{Config, NoTls, Row};
+use postgres::{Config, NoTls, Row, GenericClient};
 use r2d2_postgres::{PostgresConnectionManager, r2d2::{Pool, PooledConnection}};
 
 #[derive(Debug, Serialize)]
@@ -25,16 +25,20 @@ pub struct NewUser {
     pub first_name: String,
     pub last_name: String,
 }
-
+#[derive(Serialize)]
 pub struct TodoTask {
     pub id: i32,
     pub user_id: i32,
-    pub task_desc: String,
+    pub item_desc: String,
 }
 
 impl From<&Row> for TodoTask {
-    fn from(_: &Row) -> Self {
-        todo!()
+    fn from(row: &Row) -> Self {
+        TodoTask {
+            id: row.get("id"),
+            user_id: row.get("user_id"),
+            item_desc: row.get("item_desc"),
+        }
     }
 }
 
@@ -55,7 +59,7 @@ impl DbError {
 impl Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            &Self::QueryFailure(_) => write!(f, "Failed to execute query")
+            &Self::QueryFailure(ref pg_err) => write!(f, "Failed to execute query: {}", pg_err)
         }
     }
 }
@@ -83,7 +87,7 @@ pub fn connect() -> PgPool {
         .build(cxn_manager).expect("Failed to build connection pool")
 }
 
-pub fn get_users(conn: &mut PgClient) -> Result<Vec<TodoUser>, DbError> {
+pub fn get_users(conn: &mut impl GenericClient) -> Result<Vec<TodoUser>, DbError> {
     let fetched_users = conn.query("SELECT * FROM todo_user", &[])
         .map_err(DbError::generic)?
         .iter()
@@ -93,8 +97,8 @@ pub fn get_users(conn: &mut PgClient) -> Result<Vec<TodoUser>, DbError> {
     Ok(fetched_users)
 }
 
-pub fn get_tasks_for_user(conn: &mut PgClient, user_id: i32) -> Result<Vec<TodoTask>, DbError> {
-    let fetched_tasks = conn.query("SELECT * FROM todo_task WHERE user_id = $1", &[&user_id])
+pub fn get_tasks_for_user(conn: &mut impl GenericClient, user_id: i32) -> Result<Vec<TodoTask>, DbError> {
+    let fetched_tasks = conn.query("SELECT * FROM todo_item WHERE user_id = $1", &[&user_id])
         .map_err(DbError::generic)?
         .iter()
         .map(TodoTask::from)

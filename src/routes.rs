@@ -1,5 +1,8 @@
+use std::{ops::DerefMut};
+
 use actix_web::*;
 use log::*;
+
 
 use crate::db::{PgPool, self};
 
@@ -26,12 +29,29 @@ pub async fn get_users(pg_pool: web::Data<PgPool>) -> impl Responder {
         Ok(cxn) => cxn,
         Err(_) => return HttpResponse::InternalServerError().body("Failed to connect to database"),
     };
-    let users = db::get_users(&mut db_cxn);
+    let users = db::get_users(db_cxn.deref_mut());
     match users {
         Ok(users) => HttpResponse::Ok().json(users),
         Err(db_err) => {
             error!("User retrieve failure: {}", db_err);
             HttpResponse::InternalServerError().json("Failed to retrieve users")
         },
+    }
+}
+
+#[get("/users/{user_id}/tasks")]
+pub async fn get_tasks_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): web::Path<i32>) -> impl Responder {
+    info!("Get tasks for user {}", user_id);
+    let mut db_cxn = match pg_pool.get_ref().get() {
+        Ok(cxn) => cxn,
+        Err(_) => return HttpResponse::InternalServerError().body("Failed to connect to database"),
+    };
+    let tasks = db::get_tasks_for_user(db_cxn.deref_mut(), user_id);
+    match tasks {
+        Ok(tasks) => HttpResponse::Ok().json(tasks),
+        Err(db_err) => {
+            error!("Task retrieve failure: {}", db_err);
+            HttpResponse::InternalServerError().json("Failed to retrieve tasks")
+        }
     }
 }
