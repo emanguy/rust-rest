@@ -2,6 +2,7 @@ use std::{time::Duration, fmt::Display, error::Error};
 
 use serde::Serialize;
 use postgres::{Config, NoTls, Row, GenericClient};
+use postgres::types::ToSql;
 use r2d2_postgres::{PostgresConnectionManager, r2d2::{Pool, PooledConnection}};
 
 #[derive(Debug, Serialize)]
@@ -25,6 +26,7 @@ pub struct NewUser {
     pub first_name: String,
     pub last_name: String,
 }
+
 #[derive(Serialize)]
 pub struct TodoTask {
     pub id: i32,
@@ -42,8 +44,30 @@ impl From<&Row> for TodoTask {
     }
 }
 
+#[derive(Deserialize)]
+pub struct NewTask {
+    pub user_id: i32,
+    pub item_desc: String,
+}
+
+impl NewTask {
+    pub fn as_columns(&self) -> Vec<dyn ToSql> {
+        vec![self.user_id, self.item_desc]
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateTask {
+    pub item_desc: String,
+}
+
+impl UpdateTask {
+    pub fn as_columns(&self) -> Vec<dyn ToSql + Sync> {
+        vec![self.item_desc]
+    }
+}
+
 pub type PgPool = Pool<PostgresConnectionManager<NoTls>>;
-pub type PgClient = PooledConnection<PostgresConnectionManager<NoTls>>;
 
 #[derive(Debug)]
 pub enum DbError {
@@ -105,4 +129,13 @@ pub fn get_tasks_for_user(conn: &mut impl GenericClient, user_id: i32) -> Result
         .collect::<Vec<TodoTask>>();
 
     Ok(fetched_tasks)
+}
+
+pub fn add_task_for_user(conn: &mut impl GenericClient, new_task: &NewTask) -> Result<TodoTask, DbError> {
+    // TODO update this to take the JSON payload and the user ID separately
+    let inserted_task: TodoTask = conn.query_one("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2);", new_task.as_columns().as_slice())
+        .map_err(DbError::generic)?
+        .into();
+
+    Ok(inserted_task)
 }

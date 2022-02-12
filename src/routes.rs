@@ -3,7 +3,6 @@ use std::{ops::DerefMut};
 use actix_web::*;
 use log::*;
 
-
 use crate::db::{PgPool, self};
 
 #[get("/")]
@@ -55,3 +54,6 @@ pub async fn get_tasks_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): 
         }
     }
 }
+
+#[post("/users/{user_id}/tasks")]
+pub async fn add_task_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): web::Path<i32>, item_desc)
