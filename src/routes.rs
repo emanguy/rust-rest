@@ -1,6 +1,8 @@
 use std::{ops::DerefMut};
+use std::ops::Deref;
 
 use actix_web::*;
+use actix_web::body::Body;
 use log::*;
 
 use crate::db::{PgPool, self};
@@ -38,9 +40,14 @@ pub async fn get_users(pg_pool: web::Data<PgPool>) -> impl Responder {
     }
 }
 
+pub fn add_task_routes(config: &mut web::ServiceConfig) {
+    config.service(get_tasks_for_user)
+        .service(add_task_for_user);
+}
+
 #[get("/users/{user_id}/tasks")]
 pub async fn get_tasks_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): web::Path<i32>) -> impl Responder {
-    info!("Get tasks for user {}", user_id);
+    info!("Get tasks for user {user_id}");
     let mut db_cxn = match pg_pool.get_ref().get() {
         Ok(cxn) => cxn,
         Err(_) => return HttpResponse::InternalServerError().body("Failed to connect to database"),
@@ -50,10 +57,24 @@ pub async fn get_tasks_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): 
         Ok(tasks) => HttpResponse::Ok().json(tasks),
         Err(db_err) => {
             error!("Task retrieve failure: {}", db_err);
-            HttpResponse::InternalServerError().json("Failed to retrieve tasks")
+            HttpResponse::InternalServerError().body("Failed to retrieve tasks")
         }
     }
 }
 
 #[post("/users/{user_id}/tasks")]
-pub async fn add_task_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): web::Path<i32>, item_desc)
+pub async fn add_task_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): web::Path<i32>, task_data: web::Json<db::NewTask>) -> impl Responder {
+    info!("Adding task for user {user_id}");
+    let mut db_cxn = match pg_pool.get_ref().get() {
+        Ok(cxn) => cxn,
+        Err(_) => return HttpResponse::InternalServerError().body("Failed to connect to database"),
+    };
+    let inserted_task = db::add_task_for_user(db_cxn.deref_mut(), user_id, task_data.deref());
+    match inserted_task {
+        Ok(task) => HttpResponse::Created().json(task),
+        Err(db_err) => {
+            error!("Insert task failure: {db_err}");
+            HttpResponse::InternalServerError().body("Failed to add task.")
+        },
+    }
+}

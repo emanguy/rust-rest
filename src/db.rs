@@ -1,9 +1,10 @@
 use std::{time::Duration, fmt::Display, error::Error};
+use std::borrow::Borrow;
 
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use postgres::{Config, NoTls, Row, GenericClient};
 use postgres::types::ToSql;
-use r2d2_postgres::{PostgresConnectionManager, r2d2::{Pool, PooledConnection}};
+use r2d2_postgres::{PostgresConnectionManager, r2d2::Pool};
 
 #[derive(Debug, Serialize)]
 pub struct TodoUser {
@@ -46,13 +47,12 @@ impl From<&Row> for TodoTask {
 
 #[derive(Deserialize)]
 pub struct NewTask {
-    pub user_id: i32,
     pub item_desc: String,
 }
 
 impl NewTask {
-    pub fn as_columns(&self) -> Vec<dyn ToSql> {
-        vec![self.user_id, self.item_desc]
+    pub fn as_columns<'task>(&'task self) -> Vec<&'task (dyn ToSql + Sync)> {
+        vec![&self.item_desc]
     }
 }
 
@@ -62,8 +62,8 @@ pub struct UpdateTask {
 }
 
 impl UpdateTask {
-    pub fn as_columns(&self) -> Vec<dyn ToSql + Sync> {
-        vec![self.item_desc]
+    pub fn as_columns(&self) -> Vec<Box<dyn ToSql + Sync>> {
+        vec![Box::new(self.item_desc.clone())]
     }
 }
 
@@ -131,10 +131,12 @@ pub fn get_tasks_for_user(conn: &mut impl GenericClient, user_id: i32) -> Result
     Ok(fetched_tasks)
 }
 
-pub fn add_task_for_user(conn: &mut impl GenericClient, new_task: &NewTask) -> Result<TodoTask, DbError> {
-    // TODO update this to take the JSON payload and the user ID separately
-    let inserted_task: TodoTask = conn.query_one("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2);", new_task.as_columns().as_slice())
+pub fn add_task_for_user(conn: &mut impl GenericClient, user_id: i32, new_task: &NewTask) -> Result<TodoTask, DbError> {
+    let mut columns: Vec<&(dyn ToSql + Sync)> = vec!(&user_id);
+    columns.append(&mut new_task.as_columns());
+    let inserted_task: TodoTask = conn.query_one("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2);", columns.as_slice())
         .map_err(DbError::generic)?
+        .borrow()
         .into();
 
     Ok(inserted_task)

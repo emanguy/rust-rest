@@ -22,7 +22,8 @@ async fn main() -> std::io::Result<()> {
             .service(routes::echo)
             .route("/hey", web::get().to(routes::manual_hello))
             .route("/users", web::get().to(routes::get_users))
-            .service(routes::get_tasks_for_user)
+            .configure(routes::add_task_routes)
+
     })
         .bind("0.0.0.0:8082")?
         .run()
