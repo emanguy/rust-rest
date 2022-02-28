@@ -1,7 +1,7 @@
 use actix_web::*;
 use log::*;
 use dotenv::dotenv;
-use std::env;
+
 
 mod routes;
 mod db;
@@ -22,8 +22,10 @@ async fn main() -> std::io::Result<()> {
             .service(routes::echo)
             .route("/hey", web::get().to(routes::manual_hello))
             .route("/users", web::get().to(routes::get_users))
+            .configure(routes::add_task_routes)
+
     })
-        .bind("0.0.0.0:8082")?
+        .bind("0.0.0.0:8080")?
         .run()
         .await;
 }
