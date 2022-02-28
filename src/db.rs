@@ -6,6 +6,8 @@ use serde::{Serialize, Deserialize};
 use postgres::{Config, NoTls, Row, GenericClient};
 use postgres::types::ToSql;
 use r2d2_postgres::{PostgresConnectionManager, r2d2::Pool};
+use sqlx::Pool;
+use sqlx::postgres::PgPoolOptions;
 
 #[derive(Debug, Serialize)]
 pub struct TodoUser {
@@ -110,6 +112,12 @@ pub fn connect() -> PgPool {
         .max_size(20)
         .connection_timeout(Duration::from_secs(2))
         .build(cxn_manager).expect("Failed to build connection pool")
+}
+
+pub fn connect_sqlx() -> sqlx::PgPool {
+    PgPoolOptions::new()
+        .connect_timeout(Duration::from_secs(2))
+        .max_connections(16);
 }
 
 pub fn get_users(conn: &mut impl GenericClient) -> Result<Vec<TodoUser>, DbError> {
