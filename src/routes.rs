@@ -4,6 +4,7 @@ use std::ops::Deref;
 use actix_web::*;
 use actix_web::body::Body;
 use log::*;
+use serde::Serialize;
 
 use crate::db::{PgPool, self};
 
@@ -42,7 +43,9 @@ pub async fn get_users(pg_pool: web::Data<PgPool>) -> impl Responder {
 
 pub fn add_task_routes(config: &mut web::ServiceConfig) {
     config.service(get_tasks_for_user)
-        .service(add_task_for_user);
+        .service(add_task_for_user)
+        .service(update_task_for_user)
+        .service(delete_task_for_user);
 }
 
 #[get("/users/{user_id}/tasks")]
@@ -62,6 +65,11 @@ pub async fn get_tasks_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): 
     }
 }
 
+#[derive(Serialize)]
+struct InsertedTask {
+    id: i32,
+}
+
 #[post("/users/{user_id}/tasks")]
 pub async fn add_task_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): web::Path<i32>, task_data: web::Json<db::NewTask>) -> impl Responder {
     info!("Adding task for user {user_id}");
@@ -71,10 +79,44 @@ pub async fn add_task_for_user(pg_pool: web::Data<PgPool>, web::Path(user_id): w
     };
     let inserted_task = db::add_task_for_user(db_cxn.deref_mut(), user_id, task_data.deref());
     match inserted_task {
-        Ok(task) => HttpResponse::Created().json(task),
+        Ok(id) => HttpResponse::Created().json(InsertedTask { id }),
         Err(db_err) => {
             error!("Insert task failure: {db_err}");
             HttpResponse::InternalServerError().body("Failed to add task.")
         },
+    }
+}
+
+#[patch("/tasks/{task_id}")]
+pub async fn update_task_for_user(pg_pool: web::Data<PgPool>, web::Path(task_id): web::Path<i32>, task_data: web::Json<db::UpdateTask>) -> impl Responder {
+    info!("Updating task {task_id}");
+    let mut db_cxn = match pg_pool.get_ref().get() {
+        Ok(cxn) => cxn,
+        Err(_) => return HttpResponse::InternalServerError().body("Failed to connect to database"),
+    };
+    let update_result = db::update_user_task(db_cxn.deref_mut(), task_id, task_data.deref());
+    match update_result {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(db_err) => {
+            error!("Update task failure: {db_err}");
+            HttpResponse::InternalServerError().body("Failed to add task.")
+        }
+    }
+}
+
+#[delete("/tasks/{task_id}")]
+pub async fn delete_task_for_user(pg_pool: web::Data<PgPool>, web::Path(task_id): web::Path<i32>) -> impl Responder {
+    info!("Deleting task {task_id}");
+    let mut db_cxn = match pg_pool.get_ref().get() {
+        Ok(cxn) => cxn,
+        Err(_) => return HttpResponse::InternalServerError().body("Failed to connect to database"),
+    };
+    let delete_result = db::delete_user_task(db_cxn.deref_mut(), task_id);
+    match delete_result {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(db_err) => {
+            error!("Failed to delete task: {db_err}");
+            HttpResponse::InternalServerError().body("Failed to delete task.")
+        }
     }
 }

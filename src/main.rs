@@ -25,7 +25,7 @@ async fn main() -> std::io::Result<()> {
             .configure(routes::add_task_routes)
 
     })
-        .bind("0.0.0.0:8082")?
+        .bind("0.0.0.0:8080")?
         .run()
         .await;
 }

@@ -1,3 +1,4 @@
+use core::task;
 use std::{time::Duration, fmt::Display, error::Error};
 use std::borrow::Borrow;
 
@@ -62,8 +63,8 @@ pub struct UpdateTask {
 }
 
 impl UpdateTask {
-    pub fn as_columns(&self) -> Vec<Box<dyn ToSql + Sync>> {
-        vec![Box::new(self.item_desc.clone())]
+    pub fn as_columns<'task>(&'task self) -> Vec<&'task (dyn ToSql + Sync)> {
+        vec![&self.item_desc]
     }
 }
 
@@ -131,13 +132,29 @@ pub fn get_tasks_for_user(conn: &mut impl GenericClient, user_id: i32) -> Result
     Ok(fetched_tasks)
 }
 
-pub fn add_task_for_user(conn: &mut impl GenericClient, user_id: i32, new_task: &NewTask) -> Result<TodoTask, DbError> {
+pub fn add_task_for_user(conn: &mut impl GenericClient, user_id: i32, new_task: &NewTask) -> Result<i32, DbError> {
     let mut columns: Vec<&(dyn ToSql + Sync)> = vec!(&user_id);
     columns.append(&mut new_task.as_columns());
-    let inserted_task: TodoTask = conn.query_one("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2);", columns.as_slice())
+    let inserted_task: i32 = conn.query_one("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2) RETURNING id;", columns.as_slice())
         .map_err(DbError::generic)?
         .borrow()
-        .into();
+        .get(0);
 
     Ok(inserted_task)
+}
+
+pub fn update_user_task(conn: &mut impl GenericClient, task_id: i32, task_update: &UpdateTask) -> Result<(), DbError> {
+    let mut update_content = task_update.as_columns();
+    update_content.push(&task_id);
+    conn.execute("UPDATE todo_item SET item_desc = $1 WHERE id = $2;", update_content.as_slice())
+        .map_err(DbError::generic)?;
+
+    Ok(())
+}
+
+pub fn delete_user_task(conn: &mut impl GenericClient, task_id: i32) -> Result<(), DbError> {
+    conn.execute("DELETE FROM todo_item WHERE id = $1", &[&task_id])
+        .map_err(DbError::generic)?;
+
+    Ok(())
 }
