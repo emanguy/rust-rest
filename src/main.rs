@@ -9,15 +9,18 @@ mod db;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().expect("Failed to initialize dotenv");
-    env_logger::builder().filter_level(LevelFilter::Info).init();
+    env_logger::builder()
+        .filter_level(LevelFilter::Info)
+        .filter_module("sqlx", LevelFilter::Warn)
+        .init();
     // let db_url = env::var("DATABASE_URL").expect("Could not get database URL from environment");    
 
-    let db_connection = db::connect();
+    let sqlx_db_connection = db::connect_sqlx().await;
 
     info!("Starting server.");
     return HttpServer::new(move || {
         App::new()
-            .data(db_connection.clone())
+            .app_data(web::Data::new(sqlx_db_connection.clone()))
             .service(routes::hello)
             .service(routes::echo)
             .route("/hey", web::get().to(routes::manual_hello))
