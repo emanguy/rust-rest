@@ -21,3 +21,7 @@ Transfer/sec:    449.68KB
 Crazy that a majority of the requests responded in <100ms. When using my normal rest client with no load the server replies in <10ms.
 
 Additionally, a majority of the connection drop errors just happened because the OS couldn't keep up. There were some infrequent "too many open files" errors.
+
+## SqlX
+
+I tried switching to SqlX and while it is nicer to work with queries are slightly slower, on the order of about 50-70ms per request under heavy load and 5-8 under light. It's probably an acceptable slowdown and it's also async.
