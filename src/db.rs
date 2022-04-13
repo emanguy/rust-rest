@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 use postgres::{GenericClient};
 use postgres::types::ToSql;
 
-use sqlx::{FromRow, Row, Postgres, Executor};
+use sqlx::{FromRow, Row, Postgres, Executor, PgExecutor};
 use sqlx::postgres::{PgPoolOptions, PgPool};
 
 #[derive(Debug, Serialize, FromRow)]
@@ -96,7 +96,7 @@ pub async fn connect_sqlx() -> sqlx::PgPool {
         .expect("Could not connect to the database")
 }
 
-pub async fn get_users(conn: impl Executor<'_, Database = Postgres>) -> Result<Vec<TodoUser>, DbError> {
+pub async fn get_users(conn: impl PgExecutor<'_>) -> Result<Vec<TodoUser>, DbError> {
     let fetched_users = sqlx::query_as("SELECT * FROM todo_user")
         .fetch_all(conn)
         .await
@@ -105,7 +105,7 @@ pub async fn get_users(conn: impl Executor<'_, Database = Postgres>) -> Result<V
     Ok(fetched_users)
 }
 
-pub async fn get_tasks_for_user(conn: impl Executor<'_, Database = Postgres>, user_id: i32) -> Result<Vec<TodoTask>, DbError> {
+pub async fn get_tasks_for_user(conn: impl PgExecutor<'_>, user_id: i32) -> Result<Vec<TodoTask>, DbError> {
     let fetched_tasks = sqlx::query_as("SELECT * FROM todo_item WHERE user_id = $1")
         .bind(user_id)
         .fetch_all(conn)
@@ -115,8 +115,8 @@ pub async fn get_tasks_for_user(conn: impl Executor<'_, Database = Postgres>, us
     Ok(fetched_tasks)
 }
 
-pub async fn add_task_for_user(conn: impl Executor<'_, Database = Postgres>, user_id: i32, new_task: &NewTask) -> Result<i32, DbError> {
-    let inserted_task: i32 = sqlx::query::<Postgres>("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2) RETURNING id;")
+pub async fn add_task_for_user(conn: impl PgExecutor<'_>, user_id: i32, new_task: &NewTask) -> Result<i32, DbError> {
+    let inserted_task: i32 = sqlx::query("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2) RETURNING id;")
         .bind(user_id)
         .bind(new_task.item_desc.clone())
         .fetch_one(conn)
@@ -128,7 +128,7 @@ pub async fn add_task_for_user(conn: impl Executor<'_, Database = Postgres>, use
     Ok(inserted_task)
 }
 
-pub async fn update_user_task(conn: impl Executor<'_, Database = Postgres>, task_id: i32, task_update: &UpdateTask) -> Result<(), DbError> {
+pub async fn update_user_task(conn: impl PgExecutor<'_>, task_id: i32, task_update: &UpdateTask) -> Result<(), DbError> {
     sqlx::query("UPDATE todo_item SET item_desc = $1 WHERE id = $2;")
         .bind(task_id)
         .bind(task_update.item_desc.clone())
@@ -139,7 +139,7 @@ pub async fn update_user_task(conn: impl Executor<'_, Database = Postgres>, task
     Ok(())
 }
 
-pub async fn delete_user_task(conn: impl Executor<'_, Database = Postgres>, task_id: i32) -> Result<(), DbError> {
+pub async fn delete_user_task(conn: impl PgExecutor<'_>, task_id: i32) -> Result<(), DbError> {
     sqlx::query("DELETE FROM todo_item WHERE id = $1")
         .bind(task_id)
         .execute(conn)
