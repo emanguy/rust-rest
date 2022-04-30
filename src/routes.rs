@@ -37,6 +37,19 @@ pub async fn get_users(pg_pool: web::Data<PgPool>) -> impl Responder {
     }
 }
 
+pub async fn create_user(pg_pool: web::Data<PgPool>, user_to_create: web::Json<db::NewUser>) -> impl Responder {
+    info!("Attempt to create user: {}", user_to_create);
+    let db_cxn = pg_pool.get_ref();
+    let creation_result = db::create_user(db_cxn, &user_to_create.into_inner()).await;
+    match creation_result {
+        Ok(user_id) => HttpResponse::Ok().json(user_id),
+        Err(db_err) => {
+            error!("User create failure: {}", db_err);
+            HttpResponse::InternalServerError().json("Failed to create user")
+        }
+    }
+}
+
 // Testing adding a "controller" to the app
 pub fn add_task_routes(config: &mut web::ServiceConfig) {
     config.service(get_tasks_for_user)
@@ -68,7 +81,7 @@ struct InsertedTask {
 pub async fn add_task_for_user(pg_pool: web::Data<PgPool>, user_id: web::Path<i32>, task_data: web::Json<db::NewTask>) -> impl Responder {
     info!("Adding task for user {user_id}");
     let db_cxn = pg_pool.get_ref();
-    let inserted_task = db::add_task_for_user(db_cxn, user_id.into_inner(), task_data.deref()).await;
+    let inserted_task = db::add_task_for_user(db_cxn, user_id.into_inner(), &task_data.into_inner()).await;
     match inserted_task {
         Ok(id) => HttpResponse::Created().json(InsertedTask { id }),
         Err(db_err) => {
@@ -82,7 +95,7 @@ pub async fn add_task_for_user(pg_pool: web::Data<PgPool>, user_id: web::Path<i3
 pub async fn update_task_for_user(pg_pool: web::Data<PgPool>, task_id: web::Path<i32>, task_data: web::Json<db::UpdateTask>) -> impl Responder {
     info!("Updating task {task_id}");
     let db_cxn = pg_pool.get_ref();
-    let update_result = db::update_user_task(db_cxn, task_id.into_inner(), task_data.deref()).await;
+    let update_result = db::update_user_task(db_cxn, task_id.into_inner(), &task_data.into_inner()).await;
     match update_result {
         Ok(_) => HttpResponse::Ok().finish(),
         Err(db_err) => {

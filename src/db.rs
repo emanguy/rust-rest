@@ -1,6 +1,7 @@
 use core::task;
 use std::{time::Duration, fmt::Display, error::Error};
 use std::borrow::Borrow;
+use std::fmt::Formatter;
 
 use serde::{Serialize, Deserialize};
 use postgres::{GenericClient};
@@ -16,9 +17,16 @@ pub struct TodoUser {
     pub last_name: String,
 }
 
+#[derive(Deserialize)]
 pub struct NewUser {
     pub first_name: String,
     pub last_name: String,
+}
+
+impl Display for NewUser {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.first_name, self.last_name)
+    }
 }
 
 #[derive(Serialize, FromRow)]
@@ -56,7 +64,7 @@ impl DbError {
 impl Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            &Self::QueryFailure(ref pg_err) => write!(f, "Failed to execute query: {}", pg_err),
+            &Self::QueryFailure(ref pg_err) => write!(f, "Failed to execute query: {:?}", pg_err),
             &Self::NoResults => write!(f, "No results were returned."),
         }
     }
@@ -71,20 +79,6 @@ impl Error for DbError {
     }
 }
 
-
-// pub fn connect() -> PgPool {
-//     let mut pg_config = Config::new();
-//     pg_config
-//         .host("127.0.0.1")
-//         .port(5432)
-//         .user("postgres")
-//         .password("sample123");
-//     let cxn_manager = PostgresConnectionManager::new(pg_config, NoTls);
-//     Pool::builder()
-//         .max_size(20)
-//         .connection_timeout(Duration::from_secs(2))
-//         .build(cxn_manager).expect("Failed to build connection pool")
-// }
 
 pub async fn connect_sqlx() -> sqlx::PgPool {
     PgPoolOptions::new()
@@ -103,6 +97,18 @@ pub async fn get_users(conn: impl PgExecutor<'_>) -> Result<Vec<TodoUser>, DbErr
         .map_err(DbError::generic)?;
 
     Ok(fetched_users)
+}
+
+pub async fn create_user(conn: impl PgExecutor<'_>, user: &NewUser) -> Result<i32, DbError> {
+    let created_id: i32 = sqlx::query("INSERT INTO todo_user(first_name, last_name) VALUES ($1, $2) RETURNING id")
+        .bind(&user.first_name)
+        .bind(&user.last_name)
+        .fetch_one(conn)
+        .await
+        .map_err(DbError::generic)?
+        .get(0);
+
+    Ok(created_id)
 }
 
 pub async fn get_tasks_for_user(conn: impl PgExecutor<'_>, user_id: i32) -> Result<Vec<TodoTask>, DbError> {

@@ -25,6 +25,7 @@ async fn main() -> std::io::Result<()> {
             .service(routes::echo)
             .route("/hey", web::get().to(routes::manual_hello))
             .route("/users", web::get().to(routes::get_users))
+            .route("/users", web::post().to(routes::create_user))
             .configure(routes::add_task_routes)
 
     })
