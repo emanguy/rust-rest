@@ -1,3 +1,5 @@
+use std::env;
+
 use actix_web::*;
 use log::*;
 use dotenv::dotenv;
@@ -13,9 +15,9 @@ async fn main() -> std::io::Result<()> {
         .filter_level(LevelFilter::Info)
         .filter_module("sqlx", LevelFilter::Warn)
         .init();
-    // let db_url = env::var("DATABASE_URL").expect("Could not get database URL from environment");    
+    let db_url = env::var("DATABASE_URL").expect("Could not get database URL from environment");    
 
-    let sqlx_db_connection = db::connect_sqlx().await;
+    let sqlx_db_connection = db::connect_sqlx(db_url.as_str()).await;
 
     info!("Starting server.");
     return HttpServer::new(move || {
@@ -24,8 +26,7 @@ async fn main() -> std::io::Result<()> {
             .service(routes::hello)
             .service(routes::echo)
             .route("/hey", web::get().to(routes::manual_hello))
-            .route("/users", web::get().to(routes::get_users))
-            .route("/users", web::post().to(routes::create_user))
+            .configure(routes::add_user_routes)
             .configure(routes::add_task_routes)
 
     })

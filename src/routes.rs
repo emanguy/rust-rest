@@ -1,11 +1,9 @@
-use std::ops::Deref;
-
 use actix_web::*;
 use log::*;
-use serde::Serialize;
-use sqlx::{PgPool};
+use serde::{Serialize, Deserialize};
+use sqlx::PgPool;
 
-use crate::db;
+use crate::db::{self, DbError};
 
 #[get("/")]
 pub async fn hello() -> impl Responder {
@@ -22,6 +20,13 @@ pub async fn echo(request_body: String) -> impl Responder {
 pub async fn manual_hello() -> impl Responder {
     info!("Manual hello");
     HttpResponse::Ok().body("Hey there!")
+}
+
+
+pub fn add_user_routes(config: &mut web::ServiceConfig) {
+    config
+        .route("/users", web::get().to(get_users))
+        .route("/users", web::post().to(create_user));
 }
 
 pub async fn get_users(pg_pool: web::Data<PgPool>) -> impl Responder {
@@ -53,6 +58,7 @@ pub async fn create_user(pg_pool: web::Data<PgPool>, user_to_create: web::Json<d
 // Testing adding a "controller" to the app
 pub fn add_task_routes(config: &mut web::ServiceConfig) {
     config.service(get_tasks_for_user)
+        .service(get_task_for_user)
         .service(add_task_for_user)
         .service(update_task_for_user)
         .service(delete_task_for_user);
@@ -68,6 +74,35 @@ pub async fn get_tasks_for_user(pg_pool: web::Data<PgPool>, user_id: web::Path<i
         Err(db_err) => {
             error!("Task retrieve failure: {}", db_err);
             HttpResponse::InternalServerError().body("Failed to retrieve tasks")
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct GetTaskPath {
+    user_id: i32,
+    task_id: i32,
+}
+
+#[get("/users/{user_id}/tasks/{task_id}")]
+pub async fn get_task_for_user(pg_pool: web::Data<PgPool>, path: web::Path<GetTaskPath>) -> impl Responder {
+    info!("Get task {} for user {}", path.task_id, path.user_id);
+    let db_cxn = pg_pool.get_ref();
+    let task = db::get_task_for_user(db_cxn, path.user_id, path.task_id).await;
+    match task {
+        Ok(task) => HttpResponse::Ok().json(task),
+        Err(db_err) => {
+            
+            match db_err {
+                DbError::NoResults => {
+                    warn!("Task not found.");
+                    HttpResponse::NotFound().body("Task not found.")
+                },
+                _ => {
+                    error!("Task retrieve failure: {}", db_err);
+                    HttpResponse::InternalServerError().body("Failed to retrieve task")
+                },
+            }
         }
     }
 }

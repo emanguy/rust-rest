@@ -1,14 +1,11 @@
-use core::task;
 use std::{time::Duration, fmt::Display, error::Error};
-use std::borrow::Borrow;
 use std::fmt::Formatter;
 
 use serde::{Serialize, Deserialize};
-use postgres::{GenericClient};
-use postgres::types::ToSql;
 
-use sqlx::{FromRow, Row, Postgres, Executor, PgExecutor};
-use sqlx::postgres::{PgPoolOptions, PgPool};
+
+use sqlx::{FromRow, Row, PgExecutor};
+use sqlx::postgres::{PgPoolOptions};
 
 #[derive(Debug, Serialize, FromRow)]
 pub struct TodoUser {
@@ -80,12 +77,12 @@ impl Error for DbError {
 }
 
 
-pub async fn connect_sqlx() -> sqlx::PgPool {
+pub async fn connect_sqlx(db_url: &str) -> sqlx::PgPool {
     PgPoolOptions::new()
         .connect_timeout(Duration::from_secs(2))
         .idle_timeout(Duration::from_secs(30))
         .max_connections(16)
-        .connect("postgres://postgres:sample123@127.0.0.1/postgres")
+        .connect(db_url)
         .await
         .expect("Could not connect to the database")
 }
@@ -119,6 +116,17 @@ pub async fn get_tasks_for_user(conn: impl PgExecutor<'_>, user_id: i32) -> Resu
         .map_err(DbError::generic)?;
 
     Ok(fetched_tasks)
+}
+
+pub async fn get_task_for_user(conn: impl PgExecutor<'_>, user_id: i32, task_id: i32) -> Result<TodoTask, DbError> {
+    let fetched_task = sqlx::query_as("SELECT * FROM todo_item WHERE user_id = $1 AND id = $2")
+        .bind(user_id)
+        .bind(task_id)
+        .fetch_one(conn)
+        .await
+        .map_err(DbError::generic)?;
+    
+    Ok(fetched_task)
 }
 
 pub async fn add_task_for_user(conn: impl PgExecutor<'_>, user_id: i32, new_task: &NewTask) -> Result<i32, DbError> {
