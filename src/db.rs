@@ -1,49 +1,36 @@
-use core::task;
 use std::{time::Duration, fmt::Display, error::Error};
-use std::borrow::Borrow;
+use std::fmt::Formatter;
 
 use serde::{Serialize, Deserialize};
-use postgres::{Config, NoTls, Row, GenericClient};
-use postgres::types::ToSql;
-use r2d2_postgres::{PostgresConnectionManager, r2d2::Pool};
 
-#[derive(Debug, Serialize)]
+
+use sqlx::{FromRow, Row, PgExecutor};
+use sqlx::postgres::{PgPoolOptions};
+
+#[derive(Debug, Serialize, FromRow)]
 pub struct TodoUser {
     pub id: i32,
     pub first_name: String,
     pub last_name: String,
 }
 
-impl From<&Row> for TodoUser {
-    fn from(row: &Row) -> Self {
-        TodoUser {
-            id: row.get("id"),
-            first_name: row.get("first_name"),
-            last_name: row.get("last_name"),
-        }
-    }
-}
-
+#[derive(Deserialize)]
 pub struct NewUser {
     pub first_name: String,
     pub last_name: String,
 }
 
-#[derive(Serialize)]
+impl Display for NewUser {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.first_name, self.last_name)
+    }
+}
+
+#[derive(Serialize, FromRow)]
 pub struct TodoTask {
     pub id: i32,
     pub user_id: i32,
     pub item_desc: String,
-}
-
-impl From<&Row> for TodoTask {
-    fn from(row: &Row) -> Self {
-        TodoTask {
-            id: row.get("id"),
-            user_id: row.get("user_id"),
-            item_desc: row.get("item_desc"),
-        }
-    }
 }
 
 #[derive(Deserialize)]
@@ -51,40 +38,31 @@ pub struct NewTask {
     pub item_desc: String,
 }
 
-impl NewTask {
-    pub fn as_columns<'task>(&'task self) -> Vec<&'task (dyn ToSql + Sync)> {
-        vec![&self.item_desc]
-    }
-}
-
 #[derive(Deserialize)]
 pub struct UpdateTask {
     pub item_desc: String,
 }
 
-impl UpdateTask {
-    pub fn as_columns<'task>(&'task self) -> Vec<&'task (dyn ToSql + Sync)> {
-        vec![&self.item_desc]
-    }
-}
-
-pub type PgPool = Pool<PostgresConnectionManager<NoTls>>;
-
 #[derive(Debug)]
 pub enum DbError {
-    QueryFailure(postgres::Error)
+    QueryFailure(sqlx::Error),
+    NoResults,
 }
 
 impl DbError {
-    fn generic(pg_err: postgres::Error) -> DbError {
-        Self::QueryFailure(pg_err)
+    fn generic(pg_err: sqlx::Error) -> DbError {
+        match pg_err {
+            sqlx::Error::RowNotFound => Self::NoResults,
+            _ => Self::QueryFailure(pg_err)
+        }
     }
 }
 
 impl Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            &Self::QueryFailure(ref pg_err) => write!(f, "Failed to execute query: {}", pg_err)
+            &Self::QueryFailure(ref pg_err) => write!(f, "Failed to execute query: {:?}", pg_err),
+            &Self::NoResults => write!(f, "No results were returned."),
         }
     }
 }
@@ -92,68 +70,94 @@ impl Display for DbError {
 impl Error for DbError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            &Self::QueryFailure(ref pg_err) => Some(pg_err)
+            Self::NoResults => None,
+            Self::QueryFailure(ref pg_err) => Some(pg_err)
         }
     }
 }
 
 
-pub fn connect() -> PgPool {
-    let mut pg_config = Config::new();
-    pg_config
-        .host("127.0.0.1")
-        .port(5432)
-        .user("postgres")
-        .password("sample123");
-    let cxn_manager = PostgresConnectionManager::new(pg_config, NoTls);
-    Pool::builder()
-        .max_size(20)
-        .connection_timeout(Duration::from_secs(2))
-        .build(cxn_manager).expect("Failed to build connection pool")
+pub async fn connect_sqlx(db_url: &str) -> sqlx::PgPool {
+    PgPoolOptions::new()
+        .connect_timeout(Duration::from_secs(2))
+        .idle_timeout(Duration::from_secs(30))
+        .max_connections(16)
+        .connect(db_url)
+        .await
+        .expect("Could not connect to the database")
 }
 
-pub fn get_users(conn: &mut impl GenericClient) -> Result<Vec<TodoUser>, DbError> {
-    let fetched_users = conn.query("SELECT * FROM todo_user", &[])
-        .map_err(DbError::generic)?
-        .iter()
-        .map(TodoUser::from)
-        .collect::<Vec<TodoUser>>();
+pub async fn get_users(conn: impl PgExecutor<'_>) -> Result<Vec<TodoUser>, DbError> {
+    let fetched_users = sqlx::query_as("SELECT * FROM todo_user")
+        .fetch_all(conn)
+        .await
+        .map_err(DbError::generic)?;
 
     Ok(fetched_users)
 }
 
-pub fn get_tasks_for_user(conn: &mut impl GenericClient, user_id: i32) -> Result<Vec<TodoTask>, DbError> {
-    let fetched_tasks = conn.query("SELECT * FROM todo_item WHERE user_id = $1", &[&user_id])
+pub async fn create_user(conn: impl PgExecutor<'_>, user: &NewUser) -> Result<i32, DbError> {
+    let created_id: i32 = sqlx::query("INSERT INTO todo_user(first_name, last_name) VALUES ($1, $2) RETURNING id")
+        .bind(&user.first_name)
+        .bind(&user.last_name)
+        .fetch_one(conn)
+        .await
         .map_err(DbError::generic)?
-        .iter()
-        .map(TodoTask::from)
-        .collect::<Vec<TodoTask>>();
+        .get(0);
+
+    Ok(created_id)
+}
+
+pub async fn get_tasks_for_user(conn: impl PgExecutor<'_>, user_id: i32) -> Result<Vec<TodoTask>, DbError> {
+    let fetched_tasks = sqlx::query_as("SELECT * FROM todo_item WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_all(conn)
+        .await
+        .map_err(DbError::generic)?;
 
     Ok(fetched_tasks)
 }
 
-pub fn add_task_for_user(conn: &mut impl GenericClient, user_id: i32, new_task: &NewTask) -> Result<i32, DbError> {
-    let mut columns: Vec<&(dyn ToSql + Sync)> = vec!(&user_id);
-    columns.append(&mut new_task.as_columns());
-    let inserted_task: i32 = conn.query_one("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2) RETURNING id;", columns.as_slice())
+pub async fn get_task_for_user(conn: impl PgExecutor<'_>, user_id: i32, task_id: i32) -> Result<TodoTask, DbError> {
+    let fetched_task = sqlx::query_as("SELECT * FROM todo_item WHERE user_id = $1 AND id = $2")
+        .bind(user_id)
+        .bind(task_id)
+        .fetch_one(conn)
+        .await
+        .map_err(DbError::generic)?;
+    
+    Ok(fetched_task)
+}
+
+pub async fn add_task_for_user(conn: impl PgExecutor<'_>, user_id: i32, new_task: &NewTask) -> Result<i32, DbError> {
+    let inserted_task: i32 = sqlx::query("INSERT INTO todo_item(user_id, item_desc) VALUES ($1, $2) RETURNING id;")
+        .bind(user_id)
+        .bind(new_task.item_desc.clone())
+        .fetch_one(conn)
+        .await
         .map_err(DbError::generic)?
-        .borrow()
         .get(0);
+        
 
     Ok(inserted_task)
 }
 
-pub fn update_user_task(conn: &mut impl GenericClient, task_id: i32, task_update: &UpdateTask) -> Result<(), DbError> {
-    let mut update_content = task_update.as_columns();
-    update_content.push(&task_id);
-    conn.execute("UPDATE todo_item SET item_desc = $1 WHERE id = $2;", update_content.as_slice())
+pub async fn update_user_task(conn: impl PgExecutor<'_>, task_id: i32, task_update: &UpdateTask) -> Result<(), DbError> {
+    sqlx::query("UPDATE todo_item SET item_desc = $1 WHERE id = $2;")
+        .bind(task_id)
+        .bind(task_update.item_desc.clone())
+        .execute(conn)
+        .await
         .map_err(DbError::generic)?;
 
     Ok(())
 }
 
-pub fn delete_user_task(conn: &mut impl GenericClient, task_id: i32) -> Result<(), DbError> {
-    conn.execute("DELETE FROM todo_item WHERE id = $1", &[&task_id])
+pub async fn delete_user_task(conn: impl PgExecutor<'_>, task_id: i32) -> Result<(), DbError> {
+    sqlx::query("DELETE FROM todo_item WHERE id = $1")
+        .bind(task_id)
+        .execute(conn)
+        .await
         .map_err(DbError::generic)?;
 
     Ok(())
