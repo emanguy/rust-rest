@@ -30,7 +30,7 @@ impl ResponseError for BasicError {
 
 impl BasicError {
     pub fn from_db(db_error: DbError) -> Self {
-        match (db_error) {
+        match db_error {
             DbError::NoResults => BasicError {
                 status: 404,
                 full_error: BasicErrorResponse {

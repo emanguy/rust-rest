@@ -5,7 +5,7 @@ use sqlx::PgPool;
 
 use crate::{
     db::{self, DbError},
-    route_error::{self, BasicError},
+    route_error::BasicError,
 };
 
 #[get("/")]
