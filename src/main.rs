@@ -5,6 +5,7 @@ use dotenv::dotenv;
 use log::*;
 
 mod db;
+mod route_error;
 mod routes;
 
 #[actix_web::main]

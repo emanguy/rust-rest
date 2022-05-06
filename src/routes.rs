@@ -3,7 +3,10 @@ use log::*;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-use crate::db::{self, DbError};
+use crate::{
+    db::{self, DbError},
+    route_error::{self, BasicError},
+};
 
 #[get("/")]
 pub async fn hello() -> impl Responder {
@@ -71,17 +74,11 @@ pub fn add_task_routes(config: &mut web::ServiceConfig) {
 pub async fn get_tasks_for_user(
     pg_pool: web::Data<PgPool>,
     user_id: web::Path<i32>,
-) -> impl Responder {
+) -> Result<HttpResponse, BasicError> {
     info!("Get tasks for user {user_id}");
     let db_cxn = pg_pool.get_ref();
     let tasks = db::get_tasks_for_user(db_cxn, user_id.into_inner()).await;
-    match tasks {
-        Ok(tasks) => HttpResponse::Ok().json(tasks),
-        Err(db_err) => {
-            error!("Task retrieve failure: {}", db_err);
-            HttpResponse::InternalServerError().body("Failed to retrieve tasks")
-        }
-    }
+    Ok(HttpResponse::Ok().json(tasks.map_err(BasicError::from_db)?))
 }
 
 #[derive(Deserialize)]

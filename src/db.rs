@@ -1,5 +1,7 @@
 use std::fmt::Formatter;
-use std::{error::Error, fmt::Display, time::Duration};
+use std::{fmt::Display, time::Duration};
+
+use thiserror::Error;
 
 use serde::{Deserialize, Serialize};
 
@@ -42,9 +44,11 @@ pub struct UpdateTask {
     pub item_desc: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum DbError {
-    QueryFailure(sqlx::Error),
+    #[error("Failed to execute query: {0}")]
+    QueryFailure(#[source] sqlx::Error),
+    #[error("No results were returned.")]
     NoResults,
 }
 
@@ -53,24 +57,6 @@ impl DbError {
         match pg_err {
             sqlx::Error::RowNotFound => Self::NoResults,
             _ => Self::QueryFailure(pg_err),
-        }
-    }
-}
-
-impl Display for DbError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            &Self::QueryFailure(ref pg_err) => write!(f, "Failed to execute query: {:?}", pg_err),
-            &Self::NoResults => write!(f, "No results were returned."),
-        }
-    }
-}
-
-impl Error for DbError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::NoResults => None,
-            Self::QueryFailure(ref pg_err) => Some(pg_err),
         }
     }
 }
