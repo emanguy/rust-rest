@@ -4,18 +4,23 @@ use actix_web::*;
 use dotenv::dotenv;
 use log::*;
 
+mod app_env;
 mod db;
 mod route_error;
 mod routes;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenv().expect("Failed to initialize dotenv");
+    match dotenv() {
+        Err(_) => println!("Starting server without .env file."),
+        _ => {}
+    }
     env_logger::builder()
         .filter_level(LevelFilter::Info)
         .filter_module("sqlx", LevelFilter::Warn)
+        .parse_env(app_env::LOG_LEVEL)
         .init();
-    let db_url = env::var("DATABASE_URL").expect("Could not get database URL from environment");
+    let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
     let sqlx_db_connection = db::connect_sqlx(db_url.as_str()).await;
 

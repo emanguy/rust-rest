@@ -42,7 +42,7 @@ impl BasicError {
                 status: 500,
                 full_error: BasicErrorResponse {
                     error_code: "internal_error".to_owned(),
-                    error_description: "Could not read data to complete your request.".to_owned(),
+                    error_description: "Could not access data to complete your request.".to_owned(),
                 },
             },
         }

@@ -27,7 +27,7 @@ impl Display for NewUser {
     }
 }
 
-#[derive(Serialize, FromRow)]
+#[derive(Debug, Serialize, FromRow)]
 pub struct TodoTask {
     pub id: i32,
     pub user_id: i32,
