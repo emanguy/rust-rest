@@ -2,25 +2,15 @@ use actix_web::*;
 use log::*;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use validator::Validate;
 
-use crate::{db, route_error::BasicError};
+use crate::{db, route_error::BasicError, dto};
 
 // For a majority of the endpoints I don't use this macro because incomplete handlers generate imprecise error squiggles in the IDE.
 #[get("/")]
 pub async fn hello() -> impl Responder {
     info!("Hello");
     HttpResponse::Ok().body("Hello world!")
-}
-
-#[post("/echo")]
-pub async fn echo(request_body: String) -> impl Responder {
-    info!("Echo. Got body {}", &request_body);
-    HttpResponse::Ok().body(request_body)
-}
-
-pub async fn manual_hello() -> impl Responder {
-    info!("Manual hello");
-    HttpResponse::Ok().body("Hey there!")
 }
 
 pub fn add_user_routes(config: &mut web::ServiceConfig) {
@@ -49,9 +39,11 @@ struct InsertedUser {
 
 pub async fn create_user(
     pg_pool: web::Data<PgPool>,
-    user_to_create: web::Json<db::NewUser>,
+    user_to_create: web::Json<dto::NewUser>,
 ) -> Result<HttpResponse, BasicError> {
     info!("Attempt to create user: {}", user_to_create);
+    user_to_create.validate().map_err(BasicError::from_validate)?;
+
     let db_cxn = pg_pool.get_ref();
     let creation_result = db::create_user(db_cxn, &user_to_create.into_inner()).await;
     if creation_result.is_err() {
@@ -129,9 +121,11 @@ struct InsertedTask {
 pub async fn add_task_for_user(
     pg_pool: web::Data<PgPool>,
     user_id: web::Path<i32>,
-    task_data: web::Json<db::NewTask>,
+    task_data: web::Json<dto::NewTask>,
 ) -> Result<HttpResponse, BasicError> {
     info!("Adding task for user {user_id}");
+    task_data.validate().map_err(BasicError::from_validate)?;
+
     let db_cxn = pg_pool.get_ref();
     let unwrapped_user_id = user_id.into_inner();
     let inserted_task =
@@ -152,9 +146,11 @@ pub async fn add_task_for_user(
 pub async fn update_task_for_user(
     pg_pool: web::Data<PgPool>,
     task_id: web::Path<i32>,
-    task_data: web::Json<db::UpdateTask>,
+    task_data: web::Json<dto::UpdateTask>,
 ) -> Result<HttpResponse, BasicError> {
     info!("Updating task {task_id}");
+    task_data.validate().map_err(BasicError::from_validate)?;
+
     let db_cxn = pg_pool.get_ref();
     let update_result =
         db::update_user_task(db_cxn, task_id.into_inner(), &task_data.into_inner()).await;
