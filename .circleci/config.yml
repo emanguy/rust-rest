@@ -1,0 +1,51 @@
+version: 2.1
+
+orbs:
+  rust: circleci/rust@1.6
+
+commands:
+  cargo-install:
+    parameters:
+      package:
+        type: string
+        description: The name of the binary to install through cargo
+    steps:
+      - restore_cache:
+          key: install-v1-<< parameters.package >>
+      - run:
+          name: Install << parameters.package >>
+          command: |
+            cargo install << parameters.package >>
+      - save_cache:
+          key: install-v1-<< parameters.package >>
+          paths:
+            - ~/.cargo
+            - ./target
+
+jobs:
+  build-and-test:
+    docker:
+      - image: rust:1.60
+    steps:
+      - cargo-install:
+          package: cargo-nextest
+      - checkout
+      - rust/build
+      - run: 
+          name: "Run tests"
+          command: cargo nextest run
+      - store_test_results:
+          path: test-results/default
+  validate-quality:
+    docker:
+      - image: rust:1.60
+    steps:
+      - checkout
+      - rust/clippy
+      - rust/format
+
+workflows:
+  standard:
+    jobs:
+      - build-and-test
+      - validate-quality
