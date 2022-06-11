@@ -1,13 +1,12 @@
-
-use std::{time::Duration};
+use std::time::Duration;
 
 use thiserror::Error;
 
-use serde::{Serialize};
+use serde::Serialize;
 
+use crate::dto;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{FromRow, PgExecutor, Row};
-use crate::dto;
 
 #[derive(Debug, Serialize, FromRow)]
 pub struct TodoUser {

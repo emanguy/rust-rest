@@ -2,8 +2,6 @@ use derive_more::Display;
 use serde::Deserialize;
 use validator::Validate;
 
-
-
 #[derive(Deserialize, Display, Validate)]
 #[display(fmt = "{} {}", "first_name", "last_name")]
 pub struct NewUser {

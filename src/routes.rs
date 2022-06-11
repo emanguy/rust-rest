@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use validator::Validate;
 
-use crate::{db, route_error::BasicError, dto};
+use crate::{db, dto, route_error::BasicError};
 
 // For a majority of the endpoints I don't use this macro because incomplete handlers generate imprecise error squiggles in the IDE.
 #[get("/")]
@@ -29,7 +29,7 @@ pub async fn get_users(pg_pool: web::Data<PgPool>) -> Result<HttpResponse, Basic
             users_result.as_ref().unwrap_err()
         );
     }
-    return Ok(HttpResponse::Ok().json(users_result.map_err(BasicError::from_db)?));
+    Ok(HttpResponse::Ok().json(users_result.map_err(BasicError::from_db)?))
 }
 
 #[derive(Serialize)]
@@ -42,7 +42,9 @@ pub async fn create_user(
     user_to_create: web::Json<dto::NewUser>,
 ) -> Result<HttpResponse, BasicError> {
     info!("Attempt to create user: {}", user_to_create);
-    user_to_create.validate().map_err(BasicError::from_validate)?;
+    user_to_create
+        .validate()
+        .map_err(BasicError::from_validate)?;
 
     let db_cxn = pg_pool.get_ref();
     let creation_result = db::create_user(db_cxn, &user_to_create.into_inner()).await;
@@ -52,11 +54,11 @@ pub async fn create_user(
             creation_result.as_ref().unwrap_err()
         );
     }
-    return Ok(HttpResponse::Created().json(
+    Ok(HttpResponse::Created().json(
         creation_result
             .map_err(BasicError::from_db)
             .map(|id| InsertedUser { id })?,
-    ));
+    ))
 }
 
 // Testing adding a "controller" to the app
@@ -110,7 +112,7 @@ pub async fn get_task_for_user(
             ),
         }
     }
-    return Ok(HttpResponse::Ok().json(task.map_err(BasicError::from_db)?));
+    Ok(HttpResponse::Ok().json(task.map_err(BasicError::from_db)?))
 }
 
 #[derive(Serialize)]
@@ -136,11 +138,11 @@ pub async fn add_task_for_user(
             inserted_task.as_ref().unwrap_err()
         );
     }
-    return Ok(HttpResponse::Created().json(
+    Ok(HttpResponse::Created().json(
         inserted_task
             .map_err(BasicError::from_db)
             .map(|id| InsertedTask { id })?,
-    ));
+    ))
 }
 
 pub async fn update_task_for_user(

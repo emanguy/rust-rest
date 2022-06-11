@@ -6,9 +6,9 @@ use log::*;
 
 mod app_env;
 mod db;
+mod dto;
 mod route_error;
 mod routes;
-mod dto;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

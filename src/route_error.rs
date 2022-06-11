@@ -1,8 +1,8 @@
-use actix_web::{http::StatusCode, HttpResponse, ResponseError, web::JsonConfig};
+use actix_web::{http::StatusCode, web::JsonConfig, HttpResponse, ResponseError};
 use derive_more::Display;
 use log::error;
 use serde::Serialize;
-use validator::{ValidationError, ValidationErrors};
+use validator::ValidationErrors;
 
 use crate::db::DbError;
 
@@ -23,7 +23,7 @@ pub struct BasicError {
 impl ResponseError for BasicError {
     fn status_code(&self) -> StatusCode {
         StatusCode::from_u16(self.status)
-            .expect(format!("Tried to use illegal HTTP status: {}", self.status).as_str())
+            .unwrap_or_else(|_| panic!("Tried to use illegal HTTP status: {}", self.status))
     }
 
     fn error_response(&self) -> HttpResponse {
@@ -61,8 +61,11 @@ impl BasicError {
             full_error: BasicErrorResponse {
                 error_code: "invalid_input".to_owned(),
                 error_description: "Submitted data was invalid.".to_owned(),
-                extra_info: Some(format!("Input had the following validation errors: {}", validation_err)),
-            }
+                extra_info: Some(format!(
+                    "Input had the following validation errors: {}",
+                    validation_err
+                )),
+            },
         }
     }
 }
@@ -72,11 +75,15 @@ pub fn default_json_error_handler() -> JsonConfig {
         error!("Received invalid JSON: {}", payload_err);
         BasicError {
             status: 400,
-            full_error: BasicErrorResponse { 
-                error_code: "incomplete_json".to_owned(), 
-                error_description: "You sent an incomplete request.".to_owned(), 
-                extra_info: Some(format!("The JSON was invalid for this reason: {}", payload_err)),
-            }
-        }.into()
+            full_error: BasicErrorResponse {
+                error_code: "incomplete_json".to_owned(),
+                error_description: "You sent an incomplete request.".to_owned(),
+                extra_info: Some(format!(
+                    "The JSON was invalid for this reason: {}",
+                    payload_err
+                )),
+            },
+        }
+        .into()
     })
 }
