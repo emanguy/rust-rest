@@ -6,7 +6,7 @@ orbs:
 jobs:
   build-and-test:
     docker:
-      - image: ghcr.io/emanguy/rust-rest:1.0.0
+      - image: ghcr.io/emanguy/rust-ci:1.0.0
     steps:
       - checkout
       - rust/build
