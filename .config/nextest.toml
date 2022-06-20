@@ -1,0 +1,9 @@
+[profile.default]
+status-level = "skip"
+success-output = "immediate"
+
+[profile.ci]
+success-output = "never"
+failure-output = "final"
+fail-fast = false
+junit = { path = "cargo-tests.xml" }

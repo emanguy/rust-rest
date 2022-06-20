@@ -3,42 +3,21 @@ version: 2.1
 orbs:
   rust: circleci/rust@1.6
 
-commands:
-  cargo-install:
-    parameters:
-      package:
-        type: string
-        description: The name of the binary to install through cargo
-    steps:
-      - restore_cache:
-          key: install-v1-<< parameters.package >>
-      - run:
-          name: Install << parameters.package >>
-          command: |
-            cargo install << parameters.package >>
-      - save_cache:
-          key: install-v1-<< parameters.package >>
-          paths:
-            - ~/.cargo
-            - ./target
-
 jobs:
   build-and-test:
     docker:
-      - image: rust:1.60
+      - image: ghcr.io/emanguy/rust-rest:1.0.0
     steps:
-      - cargo-install:
-          package: cargo-nextest
       - checkout
       - rust/build
       - run: 
           name: "Run tests"
-          command: cargo nextest run
+          command: cargo nextest run --profile=ci
       - store_test_results:
-          path: test-results/default
+          path: target/nextest/ci
   validate-quality:
     docker:
-      - image: rust:1.60
+      - image: rust:1.61
     steps:
       - checkout
       - rust/clippy
