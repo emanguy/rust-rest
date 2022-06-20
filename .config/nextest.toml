@@ -2,6 +2,9 @@
 status-level = "skip"
 success-output = "immediate"
 
+[profile.quiet]
+success-output = "never"
+
 [profile.ci]
 success-output = "never"
 failure-output = "final"

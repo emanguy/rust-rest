@@ -5,7 +5,7 @@ use dotenv::dotenv;
 use log::*;
 
 mod app_env;
-mod db;
+pub mod db;
 mod dto;
 mod route_error;
 mod routes;
