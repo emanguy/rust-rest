@@ -18,14 +18,14 @@ jobs:
       - checkout
       - run:
           name: Provision database
-          run: |
+          command: |
             until psql -l
             do
               echo "Waiting for database..."
               sleep 5
             done
             psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL     
-      - rust/build
+      - rust/build:
           with_cache: true
       - run: 
           name: "Run tests"
