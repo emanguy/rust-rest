@@ -1,4 +1,3 @@
-use postgres::NoTls;
 use rand::{thread_rng, Rng};
 use crate::db;
 use sqlx::{PgPool, PgConnection, Connection};
@@ -29,8 +28,6 @@ impl TestDatabase {
         sqlx::query("ALTER DATABASE postgres WITH is_template TRUE").execute(&mut conn).await?;
         sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str()).execute(&mut conn).await?;
 
-        conn.close();
-
         Ok(Self{ base_url: String::from(base_url), template_db_name})
     }
 
@@ -41,20 +38,22 @@ impl TestDatabase {
 
 impl Drop for TestDatabase {
     fn drop(&mut self) {
-        let connection = postgres::Client::connect(&self.base_url, NoTls);
-        let mut connection = match connection {
-            Ok(conn) => conn,
-            Err(error) => { 
-                println!("Failed to remove test database {}, please remove it by hand. Connect error: {}", self.template_db_name, error);
-                return;
-            },
-        };
+        TOKIO_RT.block_on(async move {
+            let connection = PgConnection::connect(&self.base_url).await;
+            let mut connection = match connection {
+                Ok(conn) => conn,
+                Err(error) => { 
+                    println!("Failed to remove test database {}, please remove it by hand. Connect error: {}", self.template_db_name, error);
+                    return;
+                },
+            };
 
-        let drop_result = connection.execute(format!("DROP DATABASE {}", self.template_db_name).as_str(), &[]);
-        if let Err(error) = drop_result {
-            println!("Failed to remove test database {}, please remove it by hand. Schema drop error: {}", self.template_db_name, error);
-            return;
-        }
+            let drop_result = sqlx::query(format!("DROP DATABASE {}", self.template_db_name).as_str()).execute(&mut connection).await;
+            if let Err(error) = drop_result {
+                println!("Failed to remove test database {}, please remove it by hand. Schema drop error: {}", self.template_db_name, error);
+                return;
+            }
+        });
     }
 }
 
@@ -85,6 +84,7 @@ where
 
         let sqlx_pool = db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db.template_db_name()).as_str()).await;
         let _ = test_fn(sqlx_pool.clone()).await;
+        // We need to make sure the pool's connections are closed so we can drop the temp DB
         sqlx_pool.close().await;
 
         test_db
