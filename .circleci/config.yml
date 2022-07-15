@@ -13,7 +13,7 @@ jobs:
           POSTGRES_PASSWORD: sample123
     environment:
       TEST_DB_URL: "postgresql://postgres:sample123@test-db:5432"
-      DB_TABLE_URL: "$TEST_DB_URL/postgres"
+      DB_TABLE_URL: "postgresql://postgres:sample123@test-db:5432/postgres"
     steps:
       - checkout
       - run:

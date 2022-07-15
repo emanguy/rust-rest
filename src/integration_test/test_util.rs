@@ -1,16 +1,16 @@
-use rand::{thread_rng, Rng};
 use crate::db;
-use sqlx::{PgPool, PgConnection, Connection};
-use tokio::runtime::Runtime;
-use std::{env, future::Future};
-use lazy_static::lazy_static;
 use dotenv::dotenv;
+use lazy_static::lazy_static;
+use rand::{thread_rng, Rng};
+use sqlx::{Connection, PgConnection, PgPool};
+use std::{env, future::Future};
+use tokio::runtime::Runtime;
 
 lazy_static! {
     static ref TOKIO_RT: Runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("Tokio runtime failed to initialize");
+        .enable_all()
+        .build()
+        .expect("Tokio runtime failed to initialize");
 }
 
 struct TestDatabase {
@@ -25,10 +25,17 @@ impl TestDatabase {
         let template_db_name = format!("test_db_{}", schema_id);
         let mut conn = PgConnection::connect(base_url).await?;
 
-        sqlx::query("ALTER DATABASE postgres WITH is_template TRUE").execute(&mut conn).await?;
-        sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str()).execute(&mut conn).await?;
+        sqlx::query("ALTER DATABASE postgres WITH is_template TRUE")
+            .execute(&mut conn)
+            .await?;
+        sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str())
+            .execute(&mut conn)
+            .await?;
 
-        Ok(Self{ base_url: String::from(base_url), template_db_name})
+        Ok(Self {
+            base_url: String::from(base_url),
+            template_db_name,
+        })
     }
 
     fn template_db_name<'db>(&'db self) -> &'db str {
@@ -42,7 +49,7 @@ impl Drop for TestDatabase {
             let connection = PgConnection::connect(&self.base_url).await;
             let mut connection = match connection {
                 Ok(conn) => conn,
-                Err(error) => { 
+                Err(error) => {
                     println!("Failed to remove test database {}, please remove it by hand. Connect error: {}", self.template_db_name, error);
                     return;
                 },
@@ -59,12 +66,12 @@ impl Drop for TestDatabase {
 
 /// Creates a temp database for a test by using the "postgres" default table's content as a template
 /// when creating a new database.
-/// 
-/// Expects that the TEST_DB_URL environment variable is populated 
+///
+/// Expects that the TEST_DB_URL environment variable is populated
 pub fn prepare_db_and_test<F, R>(test_fn: F)
 where
     R: Future<Output = ()>,
-    F: FnOnce(PgPool) -> R
+    F: FnOnce(PgPool) -> R,
 {
     if dotenv().is_err() {
         println!("Test is running without .env file.");

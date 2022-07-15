@@ -2,7 +2,6 @@ use sqlx::Row;
 
 use super::test_util;
 
-
 #[test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 fn can_create_user() {
