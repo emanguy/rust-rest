@@ -6,13 +6,30 @@ orbs:
 jobs:
   build-and-test:
     docker:
-      - image: ghcr.io/emanguy/rust-ci:1.0.0
+      - image: ghcr.io/emanguy/rust-ci:1.1.0
+      - image: postgres:14-alpine
+        name: test-db
+        environment:
+          POSTGRES_PASSWORD: sample123
+    environment:
+      TEST_DB_URL: "postgresql://postgres:sample123@test-db:5432"
+      DB_TABLE_URL: "$TEST_DB_URL/postgres"
     steps:
       - checkout
+      - run:
+          name: Provision database
+          run: |
+            until psql -l
+            do
+              echo "Waiting for database..."
+              sleep 5
+            done
+            psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL     
       - rust/build
+          with_cache: true
       - run: 
           name: "Run tests"
-          command: cargo nextest run --profile=ci
+          command: cargo nextest run --profile=ci --features=integration_test
       - store_test_results:
           path: target/nextest/ci
   validate-quality:
