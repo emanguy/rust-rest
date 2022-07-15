@@ -19,7 +19,7 @@ jobs:
       - run:
           name: Provision database
           command: |
-            until psql -l
+            until psql -l $TEST_DB_URL
             do
               echo "Waiting for database..."
               sleep 5
