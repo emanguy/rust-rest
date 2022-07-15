@@ -10,6 +10,9 @@ mod dto;
 mod route_error;
 mod routes;
 
+#[cfg(test)]
+mod integration_test;
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     if dotenv().is_err() {
