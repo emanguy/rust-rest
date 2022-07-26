@@ -2,8 +2,8 @@ use crate::db;
 use dotenv::dotenv;
 use lazy_static::lazy_static;
 use rand::{thread_rng, Rng};
-use sqlx::{Connection, PgConnection, PgPool};
-use std::{env, future::Future};
+use sqlx::{Connection, PgConnection, PgPool, Row, postgres::PgRow, PgExecutor};
+use std::{env, future::Future, iter::Map};
 use tokio::runtime::Runtime;
 
 lazy_static! {
@@ -14,53 +14,58 @@ lazy_static! {
 }
 
 struct TestDatabase {
-    base_url: String,
     template_db_name: String,
 }
 
 impl TestDatabase {
-    async fn create(base_url: &str) -> Result<Self, sqlx::Error> {
+    async fn clear_old_dbs(&self, mut conn: PgConnection) {
+        let test_dbs = sqlx::query("SELECT datname FROM pg_catalog.pg_database WHERE datname LIKE 'test_db%'")
+            .fetch_all(&mut conn)
+            .await;
+        let test_dbs = match test_dbs {
+            Ok(results) => results.into_iter().map(|row| row.get::<String, _>(0)),
+            Err(error) => {
+                println!("Warning: failed to drop old test databases. You may );need to delete them manually. Error: {error}");
+                conn.close();
+                return;
+            }
+        };
+            
+
+        for db in test_dbs {
+            let result = sqlx::query(format!("DROP DATABASE {}", db).as_str()).execute(&mut conn).await;
+            if result.is_err() {
+                println!("Warning: failed to drop old test database {}, you may need to do it manually.", db);
+            }
+        }
+        conn.close();
+    }
+
+    async fn create(mut conn: PgConnection) -> Result<Self, sqlx::Error> {
         let mut rng = thread_rng();
         let schema_id: u32 = rng.gen_range(10_000..99_999);
         let template_db_name = format!("test_db_{}", schema_id);
-        let mut conn = PgConnection::connect(base_url).await?;
 
-        sqlx::query("ALTER DATABASE postgres WITH is_template TRUE")
+        let result = sqlx::query("ALTER DATABASE postgres WITH is_template TRUE")
             .execute(&mut conn)
-            .await?;
-        sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str())
-            .execute(&mut conn)
-            .await?;
+            .await;
+        if let Err(error) = result {
+            conn.close();
+            return Err(error);
+        }
+        let result = sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str())
+            .execute( &mut conn)
+            .await;
+        conn.close();
+        result?;
 
         Ok(Self {
-            base_url: String::from(base_url),
             template_db_name,
         })
     }
 
     fn template_db_name<'db>(&'db self) -> &'db str {
         self.template_db_name.as_str()
-    }
-}
-
-impl Drop for TestDatabase {
-    fn drop(&mut self) {
-        TOKIO_RT.block_on(async move {
-            let connection = PgConnection::connect(&self.base_url).await;
-            let mut connection = match connection {
-                Ok(conn) => conn,
-                Err(error) => {
-                    println!("Failed to remove test database {}, please remove it by hand. Connect error: {}", self.template_db_name, error);
-                    return;
-                },
-            };
-
-            let drop_result = sqlx::query(format!("DROP DATABASE {}", self.template_db_name).as_str()).execute(&mut connection).await;
-            if let Err(error) = drop_result {
-                println!("Failed to remove test database {}, please remove it by hand. Schema drop error: {}", self.template_db_name, error);
-                return;
-            }
-        });
     }
 }
 
@@ -77,23 +82,25 @@ where
         println!("Test is running without .env file.");
     }
 
-    // The drop trait implemented by TestDatabase creates a tokio runtime. Nested runtimes cause a panic,
-    // so pulling test_db out of the async runtime so it can be dropped allows the previous runtime to be closed down
-    // preventing a panic.
-    let _external_drop = TOKIO_RT.block_on(async move {
+    TOKIO_RT.block_on(async move {
         let pg_connection_base_url = env::var("TEST_DB_URL")
             .expect("You must provide the TEST_DB_URL environment variable as the base postgres connection string");
-        let test_db = TestDatabase::create(&pg_connection_base_url).await;
-        let test_db = match test_db {
-            Ok(tdb) => tdb,
-            Err(db_err) => panic!("Failed to start test database: {}", db_err),
+        let test_db = {
+            let initial_conn = PgConnection::connect(&pg_connection_base_url).await;
+            if initial_conn.is_err() {
+                panic!("Test failure - could not create initial connection to provision database.");
+            }
+            let test_db = TestDatabase::create(initial_conn).await;
+            let test_db = match test_db {
+                Ok(tdb) => tdb,
+                Err(db_err) => panic!("Failed to start test database: {}", db_err),
+            };
+            test_db.clear_old_dbs(&initial_conn).await;
+
+            test_db
         };
-
+        
         let sqlx_pool = db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db.template_db_name()).as_str()).await;
-        let _ = test_fn(sqlx_pool.clone()).await;
-        // We need to make sure the pool's connections are closed so we can drop the temp DB
-        sqlx_pool.close().await;
-
-        test_db
+        test_fn(sqlx_pool.clone()).await;
     });
 }
