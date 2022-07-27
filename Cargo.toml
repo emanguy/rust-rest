@@ -23,7 +23,7 @@ regex = "1.5.6"
 actix-http = "3.2.1"
 lazy_static = "1.4.0"
 rand = "0.8.5"
-tokio = { version = "1.19.2", features = ["full"] }
+tokio = { version = "1.19.2", features = ["sync"] }
 
 [features]
 integration_test = []
