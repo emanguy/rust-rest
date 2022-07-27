@@ -2,13 +2,13 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use crate::dto;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{FromRow, PgExecutor, Row};
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Deserialize, Serialize, FromRow, PartialEq, Eq)]
 pub struct TodoUser {
     pub id: i32,
     pub first_name: String,

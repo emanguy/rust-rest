@@ -20,6 +20,7 @@ validator = { version = "0.15.0", features = ["derive"] }
 regex = "1.5.6"
 
 [dev-dependencies]
+actix-http = "3.2.1"
 lazy_static = "1.4.0"
 rand = "0.8.5"
 tokio = { version = "1.19.2", features = ["full"] }

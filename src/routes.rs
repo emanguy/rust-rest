@@ -32,9 +32,9 @@ pub async fn get_users(pg_pool: web::Data<PgPool>) -> Result<HttpResponse, Basic
     Ok(HttpResponse::Ok().json(users_result.map_err(BasicError::from_db)?))
 }
 
-#[derive(Serialize)]
-struct InsertedUser {
-    id: i32,
+#[derive(Deserialize, Serialize)]
+pub struct InsertedUser {
+    pub id: i32,
 }
 
 pub async fn create_user(

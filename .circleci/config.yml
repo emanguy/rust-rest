@@ -29,9 +29,7 @@ jobs:
           with_cache: true
       - run: 
           name: "Run tests"
-          command: cargo nextest run --profile=ci --features=integration_test
-      - store_test_results:
-          path: target/nextest/ci
+          command: cargo test --features integration_test
   validate-quality:
     docker:
       - image: rust:1.61
