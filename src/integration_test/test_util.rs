@@ -10,7 +10,8 @@ use dotenv::dotenv;
 use lazy_static::lazy_static;
 use rand::{thread_rng, Rng};
 use sqlx::{Connection, PgConnection, Row};
-use std::{env, sync::Mutex};
+use std::env;
+use tokio::sync::Mutex;
 
 lazy_static! {
     static ref LOGGER_INITIALIZED: Mutex<bool> = Mutex::from(false);
@@ -24,7 +25,9 @@ struct TestDatabase {
 
 impl TestDatabase {
     async fn clear_old_dbs(db_base_url: &str) {
-        let mut conn = PgConnection::connect(db_base_url).await.expect("Test failure - could not create initial connection to provision database.");
+        let mut conn = PgConnection::connect(db_base_url)
+            .await
+            .expect("Test failure - could not create initial connection to provision database.");
         let test_dbs =
             sqlx::query("SELECT datname FROM pg_catalog.pg_database WHERE datname LIKE 'test_db%'")
                 .fetch_all(&mut conn)
@@ -53,9 +56,11 @@ impl TestDatabase {
     }
 
     async fn create(db_base_url: &str) -> Result<Self, sqlx::Error> {
-        let mut is_db_templatized = DB_TEMPLATIZED.lock().expect("Could not lock to toggle database templatization");
+        let mut is_db_templatized = DB_TEMPLATIZED.lock().await;
 
-        let mut conn = PgConnection::connect(db_base_url).await.expect("Test failure - could not create initial connection to provision database.");
+        let mut conn = PgConnection::connect(db_base_url)
+            .await
+            .expect("Test failure - could not create initial connection to provision database.");
         let mut rng = thread_rng();
         let schema_id: u32 = rng.gen_range(10_000..99_999);
         let template_db_name = format!("test_db_{}", schema_id);
@@ -93,7 +98,7 @@ pub async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
     // I need to create individual connections here because I need exclusive database access in order to convert a schema to a template schema
     let test_db = {
         {
-            let mut db_cleaned_state = DB_CLEANED.lock().expect("Failed to acquire database clean flag");
+            let mut db_cleaned_state = DB_CLEANED.lock().await;
             if !*db_cleaned_state {
                 TestDatabase::clear_old_dbs(pg_connection_base_url).await;
 
@@ -123,7 +128,7 @@ pub async fn prepare_application(
 ) -> impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error> {
     // As soon as we're done configuring the logger we can release the mutex
     {
-        let mut mutex_handle = LOGGER_INITIALIZED.lock().expect("Failed to acquire logger init mutex");
+        let mut mutex_handle = LOGGER_INITIALIZED.lock().await;
         if !*mutex_handle {
             if dotenv().is_err() {
                 println!("Test is running without .env file.");

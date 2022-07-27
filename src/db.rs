@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::dto;
 use sqlx::postgres::PgPoolOptions;
