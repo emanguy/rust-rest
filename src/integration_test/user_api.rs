@@ -1,6 +1,8 @@
 use actix_web::{
-    test::{init_service, TestRequest, call_service},
-    App, http::StatusCode,
+    http::StatusCode,
+    test::{call_service, init_service, TestRequest},
+    web::Data,
+    App,
 };
 
 use crate::{dto::NewUser, routes};
@@ -19,8 +21,12 @@ fn can_create_user() {
             })
             .to_request();
 
-        let test_svc =
-            init_service(App::new().app_data(db).configure(routes::add_user_routes)).await;
+        let test_svc = init_service(
+            App::new()
+                .app_data(Data::new(db))
+                .configure(routes::add_user_routes),
+        )
+        .await;
         let response = call_service(&test_svc, test).await;
 
         assert_eq!(StatusCode::CREATED, response.status());

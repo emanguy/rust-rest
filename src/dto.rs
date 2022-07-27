@@ -2,8 +2,7 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-#[derive(Deserialize, Display, Validate)]
-#[cfg_attr(test, derive(Serialize))]
+#[derive(Deserialize, Serialize, Display, Validate)]
 #[display(fmt = "{} {}", "first_name", "last_name")]
 pub struct NewUser {
     #[validate(length(max = 30))]
@@ -12,15 +11,13 @@ pub struct NewUser {
     pub last_name: String,
 }
 
-#[derive(Deserialize, Validate)]
-#[cfg_attr(test, derive(Serialize))]
+#[derive(Deserialize, Serialize, Validate)]
 pub struct NewTask {
     #[validate(length(min = 1))]
     pub item_desc: String,
 }
 
-#[derive(Deserialize, Validate)]
-#[cfg_attr(test, derive(Serialize))]
+#[derive(Deserialize, Serialize, Validate)]
 pub struct UpdateTask {
     #[validate(length(min = 1))]
     pub item_desc: String,

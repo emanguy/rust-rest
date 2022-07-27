@@ -13,16 +13,20 @@ mod routes;
 #[cfg(test)]
 mod integration_test;
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    if dotenv().is_err() {
-        println!("Starting server without .env file.");
-    }
+pub fn configure_logger() {
     env_logger::builder()
         .filter_level(LevelFilter::Info)
         .filter_module("sqlx", LevelFilter::Warn)
         .parse_env(app_env::LOG_LEVEL)
         .init();
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    if dotenv().is_err() {
+        println!("Starting server without .env file.");
+    }
+    configure_logger();
     let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
     let sqlx_db_connection = db::connect_sqlx(db_url.as_str()).await;

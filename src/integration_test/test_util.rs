@@ -1,9 +1,9 @@
-use crate::db;
+use crate::{configure_logger, db};
 use dotenv::dotenv;
 use lazy_static::lazy_static;
 use rand::{thread_rng, Rng};
-use sqlx::{Connection, PgConnection, PgPool, Row, postgres::PgRow, PgExecutor};
-use std::{env, future::Future, iter::Map};
+use sqlx::{Connection, PgConnection, PgPool, Row};
+use std::{env, future::Future};
 use tokio::runtime::Runtime;
 
 lazy_static! {
@@ -18,10 +18,11 @@ struct TestDatabase {
 }
 
 impl TestDatabase {
-    async fn clear_old_dbs(&self, mut conn: PgConnection) {
-        let test_dbs = sqlx::query("SELECT datname FROM pg_catalog.pg_database WHERE datname LIKE 'test_db%'")
-            .fetch_all(&mut conn)
-            .await;
+    async fn clear_old_dbs(mut conn: PgConnection) {
+        let test_dbs =
+            sqlx::query("SELECT datname FROM pg_catalog.pg_database WHERE datname LIKE 'test_db%'")
+                .fetch_all(&mut conn)
+                .await;
         let test_dbs = match test_dbs {
             Ok(results) => results.into_iter().map(|row| row.get::<String, _>(0)),
             Err(error) => {
@@ -30,12 +31,16 @@ impl TestDatabase {
                 return;
             }
         };
-            
 
         for db in test_dbs {
-            let result = sqlx::query(format!("DROP DATABASE {}", db).as_str()).execute(&mut conn).await;
+            let result = sqlx::query(format!("DROP DATABASE {}", db).as_str())
+                .execute(&mut conn)
+                .await;
             if result.is_err() {
-                println!("Warning: failed to drop old test database {}, you may need to do it manually.", db);
+                println!(
+                    "Warning: failed to drop old test database {}, you may need to do it manually.",
+                    db
+                );
             }
         }
         conn.close();
@@ -53,18 +58,17 @@ impl TestDatabase {
             conn.close();
             return Err(error);
         }
-        let result = sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str())
-            .execute( &mut conn)
-            .await;
+        let result =
+            sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str())
+                .execute(&mut conn)
+                .await;
         conn.close();
         result?;
 
-        Ok(Self {
-            template_db_name,
-        })
+        Ok(Self { template_db_name })
     }
 
-    fn template_db_name<'db>(&'db self) -> &'db str {
+    fn template_db_name(&self) -> &str {
         self.template_db_name.as_str()
     }
 }
@@ -81,26 +85,34 @@ where
     if dotenv().is_err() {
         println!("Test is running without .env file.");
     }
+    configure_logger();
 
     TOKIO_RT.block_on(async move {
         let pg_connection_base_url = env::var("TEST_DB_URL")
             .expect("You must provide the TEST_DB_URL environment variable as the base postgres connection string");
+
+            // I need to create individual connections here because I need exclusive database access in order to convert a schema to a template schema
         let test_db = {
             let initial_conn = PgConnection::connect(&pg_connection_base_url).await;
             if initial_conn.is_err() {
                 panic!("Test failure - could not create initial connection to provision database.");
             }
-            let test_db = TestDatabase::create(initial_conn).await;
+            TestDatabase::clear_old_dbs(initial_conn.unwrap()).await;
+
+            let initial_conn = PgConnection::connect(&pg_connection_base_url).await;
+            if initial_conn.is_err() {
+                panic!("Test failure - could not create initial connection to provision database.");
+            }
+            let test_db = TestDatabase::create(initial_conn.unwrap()).await;
             let test_db = match test_db {
                 Ok(tdb) => tdb,
                 Err(db_err) => panic!("Failed to start test database: {}", db_err),
             };
-            test_db.clear_old_dbs(&initial_conn).await;
 
             test_db
         };
-        
+
         let sqlx_pool = db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db.template_db_name()).as_str()).await;
-        test_fn(sqlx_pool.clone()).await;
+        test_fn(sqlx_pool).await;
     });
 }
