@@ -15,7 +15,7 @@ pub struct TodoUser {
     pub last_name: String,
 }
 
-#[derive(Debug, Serialize, FromRow)]
+#[derive(Debug, Deserialize, Serialize, FromRow)]
 pub struct TodoTask {
     pub id: i32,
     pub user_id: i32,

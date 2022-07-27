@@ -50,14 +50,14 @@ async fn can_retrieve_user() {
     )
     .expect("Could not parse create user response");
 
-    let delete_user_req = TestRequest::get()
+    let list_users_req = TestRequest::get()
         .uri("/users".to_string().as_str())
         .to_request();
-    let delete_response = call_service(&app, delete_user_req).await;
+    let list_users_resp = call_service(&app, list_users_req).await;
 
-    assert_eq!(StatusCode::OK, delete_response.status());
+    assert_eq!(StatusCode::OK, list_users_resp.status());
 
-    let res_body = delete_response.into_body().try_into_bytes();
+    let res_body = list_users_resp.into_body().try_into_bytes();
     let received_user: Vec<TodoUser> =
         serde_json::from_slice(res_body.expect("Could not extract user list body").borrow())
             .expect("Could not parse user list body");
