@@ -25,8 +25,17 @@ jobs:
               sleep 5
             done
             psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL     
-      - rust/build:
-          with_cache: true
+      - restore_cache:
+          keys:
+            - debug-compile-v1
+      - run:
+          name: "Build code"
+          command: cargo build
+      - save_cache:
+          key: debug-compile-v1
+          paths:
+            - target/debug
+            - ~/.cargo
       - run: 
           name: "Run tests"
           command: cargo test --features integration_test
