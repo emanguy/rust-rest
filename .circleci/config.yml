@@ -27,12 +27,12 @@ jobs:
             psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL     
       - restore_cache:
           keys:
-            - debug-compile-v1
+            - debug-compile
       - run:
           name: "Build code"
           command: cargo build
       - save_cache:
-          key: debug-compile-v1
+          key: debug-compile-{{ checksum "Cargo.lock" }}-v1
           paths:
             - target/debug
             - ~/.cargo
