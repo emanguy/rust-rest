@@ -2,25 +2,8 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use serde::{Deserialize, Serialize};
-
-use crate::dto;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{FromRow, PgExecutor, Row};
-
-#[derive(Debug, Deserialize, Serialize, FromRow, PartialEq, Eq)]
-pub struct TodoUser {
-    pub id: i32,
-    pub first_name: String,
-    pub last_name: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, FromRow)]
-pub struct TodoTask {
-    pub id: i32,
-    pub user_id: i32,
-    pub item_desc: String,
-}
+use crate::{dto, entity};
+use sqlx::{PgExecutor, Row, postgres::PgPoolOptions};
 
 #[derive(Debug, Error)]
 pub enum DbError {
@@ -49,7 +32,7 @@ pub async fn connect_sqlx(db_url: &str) -> sqlx::PgPool {
         .expect("Could not connect to the database")
 }
 
-pub async fn get_users(conn: impl PgExecutor<'_>) -> Result<Vec<TodoUser>, DbError> {
+pub async fn get_users(conn: impl PgExecutor<'_>) -> Result<Vec<entity::TodoUser>, DbError> {
     let fetched_users = sqlx::query_as("SELECT * FROM todo_user")
         .fetch_all(conn)
         .await
@@ -74,7 +57,7 @@ pub async fn create_user(conn: impl PgExecutor<'_>, user: &dto::NewUser) -> Resu
 pub async fn get_tasks_for_user(
     conn: impl PgExecutor<'_>,
     user_id: i32,
-) -> Result<Vec<TodoTask>, DbError> {
+) -> Result<Vec<entity::TodoTask>, DbError> {
     let fetched_tasks = sqlx::query_as("SELECT * FROM todo_item WHERE user_id = $1")
         .bind(user_id)
         .fetch_all(conn)
@@ -88,7 +71,7 @@ pub async fn get_task_for_user(
     conn: impl PgExecutor<'_>,
     user_id: i32,
     task_id: i32,
-) -> Result<TodoTask, DbError> {
+) -> Result<entity::TodoTask, DbError> {
     let fetched_task = sqlx::query_as("SELECT * FROM todo_item WHERE user_id = $1 AND id = $2")
         .bind(user_id)
         .bind(task_id)

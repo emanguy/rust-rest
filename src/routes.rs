@@ -13,6 +13,7 @@ pub async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Hello world!")
 }
 
+/// Attaches routes under "/users" to the application router.
 pub fn add_user_routes(config: &mut web::ServiceConfig) {
     config
         .route("/users", web::get().to(get_users))
@@ -37,6 +38,7 @@ pub struct InsertedUser {
     pub id: i32,
 }
 
+/// Creates a user.
 pub async fn create_user(
     pg_pool: web::Data<PgPool>,
     user_to_create: web::Json<dto::NewUser>,
@@ -61,7 +63,7 @@ pub async fn create_user(
     ))
 }
 
-// Testing adding a "controller" to the app
+/// Adds routes under "/tasks" and routes for user-owned tasks to the application router
 pub fn add_task_routes(config: &mut web::ServiceConfig) {
     config
         .route("/users/{user_id}/tasks", web::get().to(get_tasks_for_user))
@@ -74,6 +76,7 @@ pub fn add_task_routes(config: &mut web::ServiceConfig) {
         .route("/tasks/{task_id}", web::delete().to(delete_task_for_user));
 }
 
+/// Retrieves a set of tasks owned by a user
 pub async fn get_tasks_for_user(
     pg_pool: web::Data<PgPool>,
     user_id: web::Path<i32>,
@@ -95,6 +98,7 @@ pub struct GetTaskPath {
     task_id: i32,
 }
 
+/// Retrieves a specific task owned by a user
 pub async fn get_task_for_user(
     pg_pool: web::Data<PgPool>,
     path: web::Path<GetTaskPath>,
@@ -120,6 +124,7 @@ struct InsertedTask {
     id: i32,
 }
 
+/// Adds a new task for a user
 pub async fn add_task_for_user(
     pg_pool: web::Data<PgPool>,
     user_id: web::Path<i32>,
@@ -145,6 +150,7 @@ pub async fn add_task_for_user(
     ))
 }
 
+/// Updates the content of a task
 pub async fn update_task_for_user(
     pg_pool: web::Data<PgPool>,
     task_id: web::Path<i32>,
@@ -165,6 +171,7 @@ pub async fn update_task_for_user(
     }
 }
 
+/// Deletes a task
 pub async fn delete_task_for_user(
     pg_pool: web::Data<PgPool>,
     task_id: web::Path<i32>,

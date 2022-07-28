@@ -7,7 +7,7 @@ use actix_web::{
 };
 
 use crate::{
-    db::TodoUser,
+    entity::TodoUser,
     dto::NewUser,
     routes::{self, InsertedUser},
 };

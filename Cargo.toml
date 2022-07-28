@@ -17,7 +17,6 @@ serde_json = "1.0"
 thiserror = "1.0.31"
 derive_more = "0.99.17"
 validator = { version = "0.15.0", features = ["derive"] }
-regex = "1.5.6"
 
 [dev-dependencies]
 actix-http = "3.2.1"

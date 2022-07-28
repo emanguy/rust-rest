@@ -5,10 +5,11 @@ use dotenv::dotenv;
 use log::*;
 
 mod app_env;
-pub mod db;
+mod db;
 mod dto;
 mod route_error;
 mod routes;
+mod entity;
 
 #[cfg(test)]
 mod integration_test;
