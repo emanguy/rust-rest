@@ -7,13 +7,15 @@ use log::*;
 mod app_env;
 mod db;
 mod dto;
+mod entity;
 mod route_error;
 mod routes;
-mod entity;
 
 #[cfg(test)]
 mod integration_test;
 
+/// Configures the logging system for the application. Pulls configuration from the [LOG_LEVEL](app_env::LOG_LEVEL)
+/// environment variable. Sets log level to "INFO" for all modules and sqlx to "WARN" by default.
 pub fn configure_logger() {
     env_logger::builder()
         .filter_level(LevelFilter::Info)

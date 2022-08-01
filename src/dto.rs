@@ -2,6 +2,7 @@ use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
+/// DTO for creating a new user via the API
 #[derive(Deserialize, Serialize, Display, Validate)]
 #[display(fmt = "{} {}", "first_name", "last_name")]
 pub struct NewUser {
@@ -11,12 +12,20 @@ pub struct NewUser {
     pub last_name: String,
 }
 
+/// DTO containing the ID of a user that was created via the API.
+#[derive(Deserialize, Serialize)]
+pub struct InsertedUser {
+    pub id: i32,
+}
+
+/// DTO for creating a new task via the API
 #[derive(Deserialize, Serialize, Validate)]
 pub struct NewTask {
     #[validate(length(min = 1))]
     pub item_desc: String,
 }
 
+/// DTO for updating a task's content via the API
 #[derive(Deserialize, Serialize, Validate)]
 pub struct UpdateTask {
     #[validate(length(min = 1))]

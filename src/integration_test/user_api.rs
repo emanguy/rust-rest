@@ -7,9 +7,9 @@ use actix_web::{
 };
 
 use crate::{
+    dto::{InsertedUser, NewUser},
     entity::TodoUser,
-    dto::NewUser,
-    routes::{self, InsertedUser},
+    routes,
 };
 
 use super::test_util::{self, prepare_application};
@@ -27,7 +27,7 @@ fn create_user_request() -> Request {
 #[actix_web::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_create_user() {
-    let app = test_util::prepare_application(&[&routes::add_user_routes]).await;
+    let (app, _) = test_util::prepare_application(&[&routes::add_user_routes]).await;
     let test_req = create_user_request();
 
     let response = call_service(&app, test_req).await;
@@ -38,7 +38,7 @@ async fn can_create_user() {
 #[actix_web::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_retrieve_user() {
-    let app = prepare_application(&[&routes::add_user_routes]).await;
+    let (app, _) = prepare_application(&[&routes::add_user_routes]).await;
     let create_user_req = create_user_request();
 
     let create_response = call_service(&app, create_user_req).await;

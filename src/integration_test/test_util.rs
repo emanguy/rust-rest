@@ -1,4 +1,4 @@
-use crate::{configure_logger, db};
+use crate::{app_env, configure_logger, db};
 use actix_http::{body::BoxBody, Request};
 use actix_web::{
     dev::{Service, ServiceResponse},
@@ -32,7 +32,6 @@ async fn clear_old_dbs(db_base_url: &str) {
         Ok(results) => results.into_iter().map(|row| row.get::<String, _>(0)),
         Err(error) => {
             println!("Warning: failed to drop old test databases. You may );need to delete them manually. Error: {error}");
-            conn.close();
             return;
         }
     };
@@ -48,12 +47,14 @@ async fn clear_old_dbs(db_base_url: &str) {
             );
         }
     }
-    conn.close();
 }
 
 /// Creates a new test schema for a single test, using the "postgres" schema as a template which is unique to the test. Test schemas will always
 /// have the naming convention "test_db_#####", where "#####" is a random sequence of 5 numbers.
-async fn create_test_db(db_base_url: &str, db_access_lock: &Mutex<bool>) -> Result<String, sqlx::Error> {
+async fn create_test_db(
+    db_base_url: &str,
+    db_access_lock: &Mutex<bool>,
+) -> Result<String, sqlx::Error> {
     let mut is_db_templatized = db_access_lock.lock().await;
 
     let mut conn = PgConnection::connect(db_base_url)
@@ -64,23 +65,16 @@ async fn create_test_db(db_base_url: &str, db_access_lock: &Mutex<bool>) -> Resu
     let template_db_name = format!("test_db_{}", schema_id);
 
     if !*is_db_templatized {
-        let result = sqlx::query("ALTER DATABASE postgres WITH is_template TRUE")
+        sqlx::query("ALTER DATABASE postgres WITH is_template TRUE")
             .execute(&mut conn)
-            .await;
-        if let Err(error) = result {
-            conn.close();
-            return Err(error);
-        }
+            .await?;
 
         *is_db_templatized = true;
     }
 
-    let result =
-        sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str())
-            .execute(&mut conn)
-            .await;
-    conn.close();
-    result?;
+    sqlx::query(format!("CREATE DATABASE {} TEMPLATE postgres", template_db_name).as_str())
+        .execute(&mut conn)
+        .await?;
 
     Ok(template_db_name)
 }
@@ -108,17 +102,19 @@ async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
         test_db
     };
 
-    db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db).as_str())
-        .await
+    db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db).as_str()).await
 }
 
 /// Prepares a database-connected application for integration tests, attaching routes via the provided
-/// function reference slice.
+/// function reference slice. This function returns both the database pool and
 ///
 /// Expects that the TEST_DB_URL environment variable is populated.
 pub async fn prepare_application(
     routes: &[&dyn Fn(&mut web::ServiceConfig)],
-) -> impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error> {
+) -> (
+    impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
+    sqlx::PgPool,
+) {
     // As soon as we're done configuring the logger we can release the mutex
     {
         let mut mutex_handle = LOGGER_INITIALIZED.lock().await;
@@ -132,15 +128,19 @@ pub async fn prepare_application(
         }
     }
 
-    let pg_connection_base_url = env::var("TEST_DB_URL")
-        .expect("You must provide the TEST_DB_URL environment variable as the base postgres connection string");
+    let pg_connection_base_url = env::var(app_env::test::TEST_DB_URL).unwrap_or_else(|_| {
+        panic!(
+            "You must provide the {} environment variable as the base postgres connection string",
+            app_env::test::TEST_DB_URL
+        )
+    });
 
     let db = prepare_db(pg_connection_base_url.as_str()).await;
-    let mut app = App::new().app_data(Data::new(db));
+    let mut app = App::new().app_data(Data::new(db.clone()));
 
     for route in routes {
         app = app.configure(route);
     }
 
-    init_service(app).await
+    (init_service(app).await, db)
 }
