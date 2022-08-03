@@ -50,9 +50,7 @@ async fn can_retrieve_user() {
     )
     .expect("Could not parse create user response");
 
-    let list_users_req = TestRequest::get()
-        .uri("/users")
-        .to_request();
+    let list_users_req = TestRequest::get().uri("/users").to_request();
     let list_users_resp = call_service(&app, list_users_req).await;
 
     assert_eq!(StatusCode::OK, list_users_resp.status());
