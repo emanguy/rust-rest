@@ -40,6 +40,26 @@
             },
             "args": [],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration tests in executable 'sample-rest'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=sample-rest",
+                    "--package=sample-rest",
+                    "--features=integration_test"
+                ],
+                "filter": {
+                    "name": "sample-rest",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

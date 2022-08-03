@@ -6,6 +6,7 @@ use validator::ValidationErrors;
 
 use crate::db::DbError;
 
+/// Contains diagnostic information about an API failure
 #[derive(Serialize, Debug)]
 pub struct BasicErrorResponse {
     error_code: String,
@@ -13,6 +14,8 @@ pub struct BasicErrorResponse {
     extra_info: Option<String>,
 }
 
+/// Basic error type for the application. Other lower level errors can be converted into this type using
+/// transform functions defined on it in combination with [Result]'s `map_err()` function.
 #[derive(Debug, Display)]
 #[display(fmt = "Error {}: {}", "status", "full_error.error_description")]
 pub struct BasicError {
@@ -32,6 +35,7 @@ impl ResponseError for BasicError {
 }
 
 impl BasicError {
+    /// Converts a [DbError] into a [BasicError].
     pub fn from_db(db_error: DbError) -> Self {
         error!("Database error occurred: {}", db_error);
         match db_error {
@@ -54,6 +58,7 @@ impl BasicError {
         }
     }
 
+    /// Converts [ValidationErrors] into a [BasicError].
     pub fn from_validate(validation_err: ValidationErrors) -> Self {
         error!("Input was invalid: {}", validation_err);
         BasicError {
@@ -70,6 +75,8 @@ impl BasicError {
     }
 }
 
+/// Factory for overriding the default actix JSON error handler to return a [BasicError]
+/// to be consistent with the rest of the API.
 pub fn default_json_error_handler() -> JsonConfig {
     JsonConfig::default().error_handler(|payload_err, _| {
         error!("Received invalid JSON: {}", payload_err);

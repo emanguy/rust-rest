@@ -2,26 +2,10 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use serde::Serialize;
+use crate::{dto, entity};
+use sqlx::{postgres::PgPoolOptions, PgExecutor, Row};
 
-use crate::dto;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{FromRow, PgExecutor, Row};
-
-#[derive(Debug, Serialize, FromRow)]
-pub struct TodoUser {
-    pub id: i32,
-    pub first_name: String,
-    pub last_name: String,
-}
-
-#[derive(Debug, Serialize, FromRow)]
-pub struct TodoTask {
-    pub id: i32,
-    pub user_id: i32,
-    pub item_desc: String,
-}
-
+/// Describes errors that may happen at the database layer
 #[derive(Debug, Error)]
 pub enum DbError {
     #[error("Failed to execute query: {0}")]
@@ -31,6 +15,7 @@ pub enum DbError {
 }
 
 impl DbError {
+    /// Converts a sqlx error to a [DbError]
     fn generic(pg_err: sqlx::Error) -> DbError {
         match pg_err {
             sqlx::Error::RowNotFound => Self::NoResults,
@@ -39,6 +24,7 @@ impl DbError {
     }
 }
 
+/// Connects to a PostgreSQL database with the given `db_url`, returning a connection pool for accessing it
 pub async fn connect_sqlx(db_url: &str) -> sqlx::PgPool {
     PgPoolOptions::new()
         .connect_timeout(Duration::from_secs(2))
@@ -49,7 +35,8 @@ pub async fn connect_sqlx(db_url: &str) -> sqlx::PgPool {
         .expect("Could not connect to the database")
 }
 
-pub async fn get_users(conn: impl PgExecutor<'_>) -> Result<Vec<TodoUser>, DbError> {
+/// Retrieves all users in the system
+pub async fn get_users(conn: impl PgExecutor<'_>) -> Result<Vec<entity::TodoUser>, DbError> {
     let fetched_users = sqlx::query_as("SELECT * FROM todo_user")
         .fetch_all(conn)
         .await
@@ -58,6 +45,7 @@ pub async fn get_users(conn: impl PgExecutor<'_>) -> Result<Vec<TodoUser>, DbErr
     Ok(fetched_users)
 }
 
+/// Creates a new user
 pub async fn create_user(conn: impl PgExecutor<'_>, user: &dto::NewUser) -> Result<i32, DbError> {
     let created_id: i32 =
         sqlx::query("INSERT INTO todo_user(first_name, last_name) VALUES ($1, $2) RETURNING id")
@@ -71,10 +59,11 @@ pub async fn create_user(conn: impl PgExecutor<'_>, user: &dto::NewUser) -> Resu
     Ok(created_id)
 }
 
+/// Retrieves tasks owned by the given user
 pub async fn get_tasks_for_user(
     conn: impl PgExecutor<'_>,
     user_id: i32,
-) -> Result<Vec<TodoTask>, DbError> {
+) -> Result<Vec<entity::TodoTask>, DbError> {
     let fetched_tasks = sqlx::query_as("SELECT * FROM todo_item WHERE user_id = $1")
         .bind(user_id)
         .fetch_all(conn)
@@ -84,11 +73,12 @@ pub async fn get_tasks_for_user(
     Ok(fetched_tasks)
 }
 
+/// Gets a specific task owned by a user
 pub async fn get_task_for_user(
     conn: impl PgExecutor<'_>,
     user_id: i32,
     task_id: i32,
-) -> Result<TodoTask, DbError> {
+) -> Result<entity::TodoTask, DbError> {
     let fetched_task = sqlx::query_as("SELECT * FROM todo_item WHERE user_id = $1 AND id = $2")
         .bind(user_id)
         .bind(task_id)
@@ -99,6 +89,7 @@ pub async fn get_task_for_user(
     Ok(fetched_task)
 }
 
+/// Adds a new task for a user
 pub async fn add_task_for_user(
     conn: impl PgExecutor<'_>,
     user_id: i32,
@@ -116,6 +107,7 @@ pub async fn add_task_for_user(
     Ok(inserted_task)
 }
 
+/// Updates a task
 pub async fn update_user_task(
     conn: impl PgExecutor<'_>,
     task_id: i32,
@@ -131,6 +123,7 @@ pub async fn update_user_task(
     Ok(())
 }
 
+/// Deletes a task for a user
 pub async fn delete_user_task(conn: impl PgExecutor<'_>, task_id: i32) -> Result<(), DbError> {
     sqlx::query("DELETE FROM todo_item WHERE id = $1")
         .bind(task_id)

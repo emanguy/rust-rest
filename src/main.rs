@@ -7,19 +7,29 @@ use log::*;
 mod app_env;
 mod db;
 mod dto;
+mod entity;
 mod route_error;
 mod routes;
+
+#[cfg(test)]
+mod integration_test;
+
+/// Configures the logging system for the application. Pulls configuration from the [LOG_LEVEL](app_env::LOG_LEVEL)
+/// environment variable. Sets log level to "INFO" for all modules and sqlx to "WARN" by default.
+pub fn configure_logger() {
+    env_logger::builder()
+        .filter_level(LevelFilter::Info)
+        .filter_module("sqlx", LevelFilter::Warn)
+        .parse_env(app_env::LOG_LEVEL)
+        .init();
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     if dotenv().is_err() {
         println!("Starting server without .env file.");
     }
-    env_logger::builder()
-        .filter_level(LevelFilter::Info)
-        .filter_module("sqlx", LevelFilter::Warn)
-        .parse_env(app_env::LOG_LEVEL)
-        .init();
+    configure_logger();
     let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
     let sqlx_db_connection = db::connect_sqlx(db_url.as_str()).await;

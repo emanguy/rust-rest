@@ -1,6 +1,6 @@
 # Rust REST Server
 
-Test of building a REST API using Actix with the R2D2 Postgres connection pool. Start the server with `cargo run`.
+Test of building a REST API using Actix with the SQLX PostgreSQL connection pool. Start the server with `cargo run`. Run tests with `cargo test`.
 
 ## Benchmark
 
@@ -22,6 +22,27 @@ Crazy that a majority of the requests responded in <100ms. When using my normal 
 
 Additionally, a majority of the connection drop errors just happened because the OS couldn't keep up. There were some infrequent "too many open files" errors.
 
-## SqlX
+## Integration tests
 
-I tried switching to SqlX and while it is nicer to work with queries are slightly slower, on the order of about 50-70ms per request under heavy load and 5-8 under light. It's probably an acceptable slowdown and it's also async.
+Provided on this repo is a framework for integration testing. By default, the integration tests are skipped via the `#[cfg_attr()]` declaration which requires the `integration_test` feature to be enabled.
+
+To run the tests with the integration tests, run the following:
+
+```bash
+# Create a postgres database to test against
+docker-compose up -d
+# Run all tests, including integration tests
+cargo test --features integration_test
+```
+
+### Marking a test as an integration test
+
+Tests can be marked as integration tests by conditionally adding the "ignore" attribute to a test function based on the presence of the "integration_test" feature:
+
+```rust
+#[test]
+#[cfg_attr(not(feature = "integration_test"), ignore)]
+fn my_test() {
+  // ...
+}
+```

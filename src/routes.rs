@@ -7,19 +7,22 @@ use validator::Validate;
 use crate::{db, dto, route_error::BasicError};
 
 // For a majority of the endpoints I don't use this macro because incomplete handlers generate imprecise error squiggles in the IDE.
+/// Sample endpoint that can be used to show the API is responsive.
 #[get("/")]
 pub async fn hello() -> impl Responder {
     info!("Hello");
     HttpResponse::Ok().body("Hello world!")
 }
 
+/// Attaches routes under "/users" to the application router.
 pub fn add_user_routes(config: &mut web::ServiceConfig) {
     config
         .route("/users", web::get().to(get_users))
         .route("/users", web::post().to(create_user));
 }
 
-pub async fn get_users(pg_pool: web::Data<PgPool>) -> Result<HttpResponse, BasicError> {
+/// Retrieves a list of all the users in the system.
+async fn get_users(pg_pool: web::Data<PgPool>) -> Result<HttpResponse, BasicError> {
     info!("Requested users");
     let db_cxn = pg_pool.get_ref();
     let users_result = db::get_users(db_cxn).await;
@@ -32,12 +35,8 @@ pub async fn get_users(pg_pool: web::Data<PgPool>) -> Result<HttpResponse, Basic
     Ok(HttpResponse::Ok().json(users_result.map_err(BasicError::from_db)?))
 }
 
-#[derive(Serialize)]
-struct InsertedUser {
-    id: i32,
-}
-
-pub async fn create_user(
+/// Creates a user.
+async fn create_user(
     pg_pool: web::Data<PgPool>,
     user_to_create: web::Json<dto::NewUser>,
 ) -> Result<HttpResponse, BasicError> {
@@ -57,11 +56,11 @@ pub async fn create_user(
     Ok(HttpResponse::Created().json(
         creation_result
             .map_err(BasicError::from_db)
-            .map(|id| InsertedUser { id })?,
+            .map(|id| dto::InsertedUser { id })?,
     ))
 }
 
-// Testing adding a "controller" to the app
+/// Adds routes under "/tasks" and routes for user-owned tasks to the application router
 pub fn add_task_routes(config: &mut web::ServiceConfig) {
     config
         .route("/users/{user_id}/tasks", web::get().to(get_tasks_for_user))
@@ -74,7 +73,8 @@ pub fn add_task_routes(config: &mut web::ServiceConfig) {
         .route("/tasks/{task_id}", web::delete().to(delete_task_for_user));
 }
 
-pub async fn get_tasks_for_user(
+/// Retrieves a set of tasks owned by a user
+async fn get_tasks_for_user(
     pg_pool: web::Data<PgPool>,
     user_id: web::Path<i32>,
 ) -> Result<HttpResponse, BasicError> {
@@ -90,12 +90,13 @@ pub async fn get_tasks_for_user(
 }
 
 #[derive(Deserialize)]
-pub struct GetTaskPath {
+struct GetTaskPath {
     user_id: i32,
     task_id: i32,
 }
 
-pub async fn get_task_for_user(
+/// Retrieves a specific task owned by a user
+async fn get_task_for_user(
     pg_pool: web::Data<PgPool>,
     path: web::Path<GetTaskPath>,
 ) -> Result<HttpResponse, BasicError> {
@@ -120,7 +121,8 @@ struct InsertedTask {
     id: i32,
 }
 
-pub async fn add_task_for_user(
+/// Adds a new task for a user
+async fn add_task_for_user(
     pg_pool: web::Data<PgPool>,
     user_id: web::Path<i32>,
     task_data: web::Json<dto::NewTask>,
@@ -145,7 +147,8 @@ pub async fn add_task_for_user(
     ))
 }
 
-pub async fn update_task_for_user(
+/// Updates the content of a task
+async fn update_task_for_user(
     pg_pool: web::Data<PgPool>,
     task_id: web::Path<i32>,
     task_data: web::Json<dto::UpdateTask>,
@@ -165,7 +168,8 @@ pub async fn update_task_for_user(
     }
 }
 
-pub async fn delete_task_for_user(
+/// Deletes a task
+async fn delete_task_for_user(
     pg_pool: web::Data<PgPool>,
     task_id: web::Path<i32>,
 ) -> Result<HttpResponse, BasicError> {
