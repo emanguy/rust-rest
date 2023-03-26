@@ -1,6 +1,8 @@
 # Rust REST Server
 
-Test of building a REST API using Actix with the SQLX PostgreSQL connection pool. Start the server with `cargo run`. Run tests with `cargo test`.
+Test of building a REST API using Axum with the SQLX PostgreSQL connection pool. Start the server with `cargo run`. Run tests with `cargo test`.
+
+_Note that the server requires a PostgreSQL database to run properly. A docker compose file is provided to start the database at your convenience._
 
 ## Benchmark
 
