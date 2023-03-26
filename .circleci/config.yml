@@ -3,6 +3,25 @@ version: 2.1
 orbs:
   rust: circleci/rust@1.6
 
+commands:
+  rust_build:
+    parameters:
+      cache_bust_version:
+        type: string
+        default: v1
+    steps:
+      - restore_cache:
+          keys:
+            - debug-compile
+      - run:
+          name: Build code
+          command: cargo build
+      - save_cache:
+          key: debug-compile-{{ checksum "Cargo.lock" }}-<< parameters.cache_bust_version >>
+          paths:
+            - target/debug
+            - ~/.cargo
+
 jobs:
   build-and-test:
     docker:
@@ -25,17 +44,7 @@ jobs:
               sleep 5
             done
             psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL     
-      - restore_cache:
-          keys:
-            - debug-compile
-      - run:
-          name: "Build code"
-          command: cargo build
-      - save_cache:
-          key: debug-compile-{{ checksum "Cargo.lock" }}-v1
-          paths:
-            - target/debug
-            - ~/.cargo
+      - rust_build
       - run: 
           name: "Run tests"
           command: cargo test --features integration_test
@@ -44,7 +53,8 @@ jobs:
       - image: rust:1.61
     steps:
       - checkout
-      - rust/clippy
+      - rust/clippy:
+          flags: --tests --features integration_test
       - rust/format
 
 workflows:

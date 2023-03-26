@@ -21,10 +21,11 @@ axum-macros = "0.3.7"
 tokio = { version = "1.19.2", features = ["full"] }
 
 [dev-dependencies]
-actix-http = "3.2.1"
+hyper = "0.14.25"
 lazy_static = "1.4.0"
 rand = "0.8.5"
 tokio = { version = "1.19.2", features = ["sync"] }
+tower = "0.4.13"
 
 [features]
 integration_test = []

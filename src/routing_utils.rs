@@ -3,7 +3,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum_macros::FromRequest;
 
-
 use serde::Serialize;
 
 use validator::ValidationErrors;

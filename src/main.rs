@@ -14,7 +14,7 @@ mod dto;
 mod entity;
 mod routing_utils;
 // mod routes;
-mod routes_axum;
+mod routes;
 
 #[cfg(test)]
 mod integration_test;
@@ -46,9 +46,9 @@ async fn main() {
     let sqlx_db_connection = db::connect_sqlx(&db_url).await;
 
     let router = Router::new()
-        .route("/hello", get(routes_axum::hello))
-        .nest("/users", routes_axum::user_routes())
-        .nest("/tasks", routes_axum::task_routes())
+        .route("/hello", get(routes::hello))
+        .nest("/users", routes::user_routes())
+        .nest("/tasks", routes::task_routes())
         .with_state(Arc::new(SharedData {
             db: sqlx_db_connection,
         }));

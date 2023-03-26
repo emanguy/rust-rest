@@ -1,10 +1,8 @@
-use std::borrow::Borrow;
-
-use actix_http::{body::MessageBody, Request};
-use actix_web::{
-    http::StatusCode,
-    test::{call_service, TestRequest},
-};
+use axum::body::Body;
+use axum::http::{header, Method, Request, StatusCode};
+use axum::Router;
+use hyper::body;
+use tower::Service; // THIS IS REQUIRED FOR Router.call()
 
 use crate::{
     dto::{InsertedUser, NewUser},
@@ -12,53 +10,89 @@ use crate::{
     routes,
 };
 
-use super::test_util::{self, prepare_application};
+use super::test_util;
 
-fn create_user_request() -> Request {
-    TestRequest::post()
+fn create_user_request() -> Request<Body> {
+    Request::builder()
+        .method(Method::POST)
         .uri("/users")
-        .set_json(NewUser {
-            first_name: String::from("John"),
-            last_name: String::from("Doe"),
-        })
-        .to_request()
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::to_string(&NewUser {
+                first_name: String::from("John"),
+                last_name: String::from("Doe"),
+            })
+            .unwrap(),
+        ))
+        .unwrap()
 }
 
-#[actix_web::test]
+#[tokio::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_create_user() {
-    let (app, _) = test_util::prepare_application(&[&routes::add_user_routes]).await;
+    let router = Router::new().nest("/users", routes::user_routes());
+    let (mut app, _) = test_util::prepare_application(router).await;
     let test_req = create_user_request();
 
-    let response = call_service(&app, test_req).await;
+    let response = app.call(test_req).await.unwrap();
 
-    assert_eq!(StatusCode::CREATED, response.status());
+    let status = response.status();
+    let body = body::to_bytes(response.into_body())
+        .await
+        .expect("Could not read response body");
+    assert_eq!(
+        StatusCode::CREATED,
+        status,
+        "Failed to create with response body {:?}",
+        body
+    );
 }
 
-#[actix_web::test]
+#[tokio::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_retrieve_user() {
-    let (app, _) = prepare_application(&[&routes::add_user_routes]).await;
+    let router = Router::new().nest("/users", routes::user_routes());
+    let (mut app, _) = test_util::prepare_application(router).await;
     let create_user_req = create_user_request();
 
-    let create_response = call_service(&app, create_user_req).await;
-    assert_eq!(StatusCode::CREATED, create_response.status());
+    let create_response = app.call(create_user_req).await.unwrap();
+    let create_status = create_response.status();
+    let res_body = body::to_bytes(create_response.into_body())
+        .await
+        .expect("Could not read create user body");
+    assert_eq!(
+        StatusCode::CREATED,
+        create_status,
+        "Did not get expected status code, received response was {:?}",
+        res_body
+    );
 
-    let res_body = create_response.into_body().try_into_bytes();
-    let user_id = serde_json::from_slice::<InsertedUser>(
-        res_body.expect("Could not read create user body").borrow(),
-    )
-    .expect("Could not parse create user response");
+    let user_id = serde_json::from_slice::<InsertedUser>(&res_body)
+        .unwrap_or_else(|_| panic!("Could not parse create user response, got body {res_body:?}"));
 
-    let list_users_req = TestRequest::get().uri("/users").to_request();
-    let list_users_resp = call_service(&app, list_users_req).await;
+    let list_users_req = Request::builder()
+        .method(Method::GET)
+        .uri("/users")
+        .body(Body::empty())
+        .expect("List users request failed to construct");
+    let list_users_resp = app
+        .call(list_users_req)
+        .await
+        .expect("User lookup request failed");
+    let list_users_status = list_users_resp.status();
+    let res_body = body::to_bytes(list_users_resp.into_body())
+        .await
+        .expect("Could not read response from list users endpoint");
 
-    assert_eq!(StatusCode::OK, list_users_resp.status());
+    assert_eq!(
+        StatusCode::OK,
+        list_users_status,
+        "Got bad status code from list users endpoint, received response {:?}",
+        res_body
+    );
 
-    let res_body = list_users_resp.into_body().try_into_bytes();
     let received_user: Vec<TodoUser> =
-        serde_json::from_slice(res_body.expect("Could not extract user list body").borrow())
-            .expect("Could not parse user list body");
+        serde_json::from_slice(&res_body).expect("Could not parse user list body");
     let expected_user = TodoUser {
         id: user_id.id,
         first_name: String::from("John"),
