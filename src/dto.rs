@@ -48,6 +48,5 @@ mod dto_tests {
         let field_validations = validation_errors.field_errors();
         assert!(field_validations.contains_key("first_name"));
         assert!(field_validations.contains_key("last_name"));
-        println!("Hellur");
     }
 }

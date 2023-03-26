@@ -1,14 +1,19 @@
 use std::env;
+use std::sync::Arc;
 
-use actix_web::*;
+use axum::extract::State;
+use axum::routing::get;
+use axum::Router;
 use dotenv::dotenv;
 use log::*;
+use sqlx::PgPool;
 
 mod app_env;
 mod db;
 mod dto;
 mod entity;
-mod route_error;
+mod routing_utils;
+// mod routes;
 mod routes;
 
 #[cfg(test)]
@@ -24,26 +29,33 @@ pub fn configure_logger() {
         .init();
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
+pub struct SharedData {
+    pub db: PgPool,
+}
+
+type AppState = State<Arc<SharedData>>;
+
+#[tokio::main]
+async fn main() {
     if dotenv().is_err() {
         println!("Starting server without .env file.");
     }
     configure_logger();
     let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
-    let sqlx_db_connection = db::connect_sqlx(db_url.as_str()).await;
+    let sqlx_db_connection = db::connect_sqlx(&db_url).await;
+
+    let router = Router::new()
+        .route("/hello", get(routes::hello))
+        .nest("/users", routes::user_routes())
+        .nest("/tasks", routes::task_routes())
+        .with_state(Arc::new(SharedData {
+            db: sqlx_db_connection,
+        }));
 
     info!("Starting server.");
-    return HttpServer::new(move || {
-        App::new()
-            .app_data(web::Data::new(route_error::default_json_error_handler()))
-            .app_data(web::Data::new(sqlx_db_connection.clone()))
-            .service(routes::hello)
-            .configure(routes::add_user_routes)
-            .configure(routes::add_task_routes)
-    })
-    .bind("0.0.0.0:8080")?
-    .run()
-    .await;
+    axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
+        .serve(router.into_make_service())
+        .await
+        .unwrap();
 }

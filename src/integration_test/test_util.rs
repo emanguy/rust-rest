@@ -1,16 +1,11 @@
-use crate::{app_env, configure_logger, db};
-use actix_http::{body::BoxBody, Request};
-use actix_web::{
-    dev::{Service, ServiceResponse},
-    test::init_service,
-    web::{self, Data},
-    App, Error,
-};
+use crate::{app_env, configure_logger, db, SharedData};
+use axum::Router;
 use dotenv::dotenv;
 use lazy_static::lazy_static;
 use rand::{thread_rng, Rng};
 use sqlx::{Connection, PgConnection, Row};
 use std::env;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 lazy_static! {
@@ -94,12 +89,11 @@ async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
         }
 
         let test_db = create_test_db(pg_connection_base_url, &DB_TEMPLATIZED).await;
-        let test_db = match test_db {
+
+        match test_db {
             Ok(tdb) => tdb,
             Err(db_err) => panic!("Failed to start test database: {}", db_err),
-        };
-
-        test_db
+        }
     };
 
     db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db).as_str()).await
@@ -110,12 +104,7 @@ async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
 /// which can handle requests based on the registered routes passed to the function.
 ///
 /// Expects that the [TEST_DB_URL](app_env::test::TEST_DB_URL) environment variable is populated.
-pub async fn prepare_application(
-    routes: &[&dyn Fn(&mut web::ServiceConfig)],
-) -> (
-    impl Service<Request, Response = ServiceResponse<BoxBody>, Error = Error>,
-    sqlx::PgPool,
-) {
+pub async fn prepare_application(routes: Router<Arc<SharedData>>) -> (Router, sqlx::PgPool) {
     // As soon as we're done configuring the logger we can release the mutex
     {
         let mut mutex_handle = LOGGER_INITIALIZED.lock().await;
@@ -137,11 +126,7 @@ pub async fn prepare_application(
     });
 
     let db = prepare_db(pg_connection_base_url.as_str()).await;
-    let mut app = App::new().app_data(Data::new(db.clone()));
+    let app = routes.with_state(Arc::new(SharedData { db: db.clone() }));
 
-    for route in routes {
-        app = app.configure(route);
-    }
-
-    (init_service(app).await, db)
+    (app, db)
 }
