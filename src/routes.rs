@@ -22,9 +22,6 @@ pub async fn hello() -> &'static str {
 
 /// Builds a router for all the user routes
 pub fn user_routes() -> Router<Arc<SharedData>> {
-    // config
-    //     .route("/users", web::get().to(get_users))
-    //     .route("/users", web::post().to(create_user));
     Router::new()
         .route("/", get(get_users))
         .route("/", post(create_user))

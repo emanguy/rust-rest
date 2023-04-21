@@ -13,8 +13,10 @@ mod db;
 mod dto;
 mod entity;
 mod routing_utils;
-// mod routes;
 mod routes;
+mod domain;
+mod persistence;
+mod api;
 
 #[cfg(test)]
 mod integration_test;
