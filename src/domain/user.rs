@@ -1,6 +1,6 @@
+use crate::domain::{DrivenPortError, Error};
 use async_trait::async_trait;
 use validator::Validate;
-use crate::domain::{Error, DrivenPortError};
 
 pub struct TodoUser {
     pub id: u32,
@@ -32,20 +32,26 @@ pub async fn get_users<Reader: UserReader>(user_reader: &Reader) -> Result<Vec<T
         log::error!("User fetch failure: {port_err}");
     }
 
-    all_users_result.map_err(|err| err.to_error_trying_to("look up all users"))
+    all_users_result.map_err(|err| err.into_error_trying_to("look up all users"))
 }
 
-pub async fn create_user<Writer: UserWriter>(user_writer: &Writer, new_user: &CreateUser) -> Result<u32, Error> {
+pub async fn create_user<Writer: UserWriter>(
+    user_writer: &Writer,
+    new_user: &CreateUser,
+) -> Result<u32, Error> {
     new_user.validate()?;
-    user_writer.create_user(new_user).await.map_err(|err| err.to_error_trying_to("create a new user"))
+    user_writer
+        .create_user(new_user)
+        .await
+        .map_err(|err| err.into_error_trying_to("create a new user"))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Mutex, RwLock};
-    use async_trait::async_trait;
-    use crate::domain::test_util::Connectivity;
     use super::*;
+    use crate::domain::test_util::Connectivity;
+    use async_trait::async_trait;
+    use std::sync::{Mutex, RwLock};
 
     struct InMemoryUserPersistence {
         highest_user_id: u32,
@@ -87,11 +93,15 @@ mod tests {
             let persister = self.read().expect("user read rwlock poisoned");
             persister.connected.blow_up_if_disconnected()?;
 
-            Ok(persister.created_users.iter().map(|user| TodoUser {
-                id: user.id,
-                first_name: user.first_name.clone(),
-                last_name: user.last_name.clone(),
-            }).collect())
+            Ok(persister
+                .created_users
+                .iter()
+                .map(|user| TodoUser {
+                    id: user.id,
+                    first_name: user.first_name.clone(),
+                    last_name: user.last_name.clone(),
+                })
+                .collect())
         }
     }
 

@@ -1,8 +1,8 @@
 use thiserror::Error;
 use validator::ValidationErrors;
 
-pub mod user;
 pub mod todo;
+pub mod user;
 
 #[cfg(test)]
 mod test_util;
@@ -23,7 +23,7 @@ pub enum Error {
 
 impl From<ValidationErrors> for Error {
     fn from(value: ValidationErrors) -> Self {
-       Self::Invalid(value)
+        Self::Invalid(value)
     }
 }
 
@@ -38,7 +38,7 @@ pub enum DrivenPortError {
 impl DrivenPortError {
     /// Converts this DrivenPortError to a domain error with some extra info on the [action]
     /// being taken when communicating over the port
-    fn to_error_trying_to(self, action: &str) -> Error {
+    fn into_error_trying_to(self, action: &str) -> Error {
         match self {
             Self::DoesNotExist => Error::DoesNotExist,
             Self::CommsFailure(err) => Error::RetrieveFailure {

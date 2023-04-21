@@ -8,15 +8,15 @@ use dotenv::dotenv;
 use log::*;
 use sqlx::PgPool;
 
+mod api;
 mod app_env;
 mod db;
+mod domain;
 mod dto;
 mod entity;
-mod routing_utils;
-mod routes;
-mod domain;
 mod persistence;
-mod api;
+mod routes;
+mod routing_utils;
 
 #[cfg(test)]
 mod integration_test;
