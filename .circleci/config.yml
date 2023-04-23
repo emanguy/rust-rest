@@ -25,7 +25,7 @@ commands:
 jobs:
   build-and-test:
     docker:
-      - image: ghcr.io/emanguy/rust-ci:1.1.0
+      - image: ghcr.io/emanguy/rust-ci:1.1.1
       - image: postgres:14-alpine
         name: test-db
         environment:
@@ -50,7 +50,7 @@ jobs:
           command: cargo test --features integration_test
   validate-quality:
     docker:
-      - image: rust:1.61
+      - image: rust:1.69
     steps:
       - checkout
       - rust/clippy:
