@@ -1,3 +1,4 @@
+use derive_more::Display;
 use thiserror::Error;
 use validator::ValidationErrors;
 
@@ -11,14 +12,20 @@ mod test_util;
 pub enum Error {
     #[error("input was invalid: {0}")]
     Invalid(ValidationErrors),
-    #[error("requested data does not exist")]
-    DoesNotExist,
+    #[error("could not find dependent resource ({what}) while trying to {action}")]
+    DependencyMissing { what: Resource, action: String },
     #[error("failed to {action} due to a communication failure: {cause}")]
     RetrieveFailure {
         action: String,
         #[source]
         cause: anyhow::Error,
     },
+}
+
+#[derive(Display, Debug)]
+pub enum Resource {
+    #[display(fmt = "user with ID of {id}")]
+    User { id: u32 },
 }
 
 impl From<ValidationErrors> for Error {
@@ -31,8 +38,6 @@ impl From<ValidationErrors> for Error {
 pub enum DrivenPortError {
     #[error("a communication failure occurred: {0}")]
     CommsFailure(anyhow::Error),
-    #[error("the requested data does not exist")]
-    DoesNotExist,
 }
 
 impl DrivenPortError {
@@ -40,7 +45,6 @@ impl DrivenPortError {
     /// being taken when communicating over the port
     fn into_error_trying_to(self, action: &str) -> Error {
         match self {
-            Self::DoesNotExist => Error::DoesNotExist,
             Self::CommsFailure(err) => Error::RetrieveFailure {
                 action: action.into(),
                 cause: err,
