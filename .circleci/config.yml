@@ -54,7 +54,7 @@ jobs:
     steps:
       - checkout
       - rust/clippy:
-          flags: --tests --features integration_test
+          flags: --tests --features integration_test -- -D warnings
       - rust/format
 
 workflows:
