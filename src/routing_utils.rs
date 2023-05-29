@@ -25,8 +25,30 @@ pub enum ExtraInfo {
 }
 
 /// Response type that wraps database errors and turns them into [BasicErrorResponse]s
+#[derive(utoipa::IntoResponses)]
 pub enum DbErrorResponse {
+    /// The requested entity could not be found
+    #[response(
+        status = StatusCode::NOT_FOUND
+        example = json!(
+        {
+            "error_code": "not_found",
+            "error_description": "The requested entity could not be found.",
+            "extra_info": null
+        }
+    ))]
     NoResults,
+
+    /// There was an issue communicating with the database
+    #[response(
+        status = StatusCode::INTERNAL_SERVER_ERROR
+        example = json!(
+        {
+            "error_code": "internal_error",
+            "error_description": "Could not access data to complete your request",
+            "extra_info": null
+        }
+    ))]
     QueryFailure,
 }
 

@@ -7,6 +7,8 @@ use axum::Router;
 use dotenv::dotenv;
 use log::*;
 use sqlx::PgPool;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 mod app_env;
 mod db;
@@ -35,6 +37,10 @@ pub struct SharedData {
 
 type AppState = State<Arc<SharedData>>;
 
+#[derive(OpenApi)]
+#[openapi()]
+pub struct TodoApi;
+
 #[tokio::main]
 async fn main() {
     if dotenv().is_err() {
@@ -45,8 +51,12 @@ async fn main() {
 
     let sqlx_db_connection = db::connect_sqlx(&db_url).await;
 
+    let mut api_docs = TodoApi::openapi();
+    api_docs.merge(routes::UsersApi::openapi());
+
     let router = Router::new()
         .route("/hello", get(routes::hello))
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_docs))
         .nest("/users", routes::user_routes())
         .nest("/tasks", routes::task_routes())
         .with_state(Arc::new(SharedData {

@@ -8,6 +8,7 @@ use axum::routing::{delete, get, patch, post};
 use axum::Router;
 use log::*;
 use serde::{Deserialize, Serialize};
+use utoipa::OpenApi;
 use validator::Validate;
 
 use crate::entity::{TodoTask, TodoUser};
@@ -19,6 +20,10 @@ pub async fn hello() -> &'static str {
     info!("Hello");
     "Hello world!"
 }
+
+#[derive(OpenApi)]
+#[openapi(paths(get_users), components(schemas(TodoUser)))]
+pub struct UsersApi;
 
 /// Builds a router for all the user routes
 pub fn user_routes() -> Router<Arc<SharedData>> {
@@ -34,6 +39,14 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
 }
 
 /// Retrieves a list of all the users in the system.
+#[utoipa::path(
+    get,
+    path = "/users",
+    responses(
+        (status = 200, description = "A list of users in the system", body = Vec<TodoUser>),
+        DbErrorResponse
+    )
+)]
 async fn get_users(State(app_data): AppState) -> Result<Json<Vec<TodoUser>>, ErrorResponse> {
     info!("Requested users");
     let db_cxn = &app_data.db;

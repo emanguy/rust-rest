@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use utoipa::ToSchema;
 
 /// DB entity describing a user
-#[derive(Debug, Deserialize, Serialize, FromRow, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, FromRow, PartialEq, Eq, ToSchema)]
 pub struct TodoUser {
     pub id: i32,
     pub first_name: String,
