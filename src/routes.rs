@@ -8,11 +8,11 @@ use axum::routing::{delete, get, patch, post};
 use axum::Router;
 use log::*;
 use serde::{Deserialize, Serialize};
-use utoipa::OpenApi;
+use utoipa::{OpenApi, ToSchema};
 use validator::Validate;
 
 use crate::entity::{TodoTask, TodoUser};
-use crate::routing_utils::{DbErrorResponse, Json, ValidationErrorResponse};
+use crate::routing_utils::{BasicErrorResponse, DbErrorResponse, Json, ValidationErrorResponse};
 use crate::{db, dto, AppState, SharedData};
 
 /// Sample endpoint that can be used to show the API is responsive.
@@ -22,14 +22,20 @@ pub async fn hello() -> &'static str {
 }
 
 #[derive(OpenApi)]
-#[openapi(paths(get_users), components(schemas(TodoUser)))]
+#[openapi(
+    paths(
+        get_users,
+        create_user,
+        get_tasks_for_user,
+        get_task_for_user,
+        add_task_for_user,
+    ),
+    components(schemas(InsertedTask,))
+)]
 pub struct UsersApi;
 
 /// Builds a router for all the user routes
 pub fn user_routes() -> Router<Arc<SharedData>> {
-    // config
-    //     .route("/users", web::get().to(get_users))
-    //     .route("/users", web::post().to(create_user));
     Router::new()
         .route("/", get(get_users))
         .route("/", post(create_user))
@@ -44,8 +50,9 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
     path = "/users",
     responses(
         (status = 200, description = "A list of users in the system", body = Vec<TodoUser>),
-        DbErrorResponse
-    )
+        (status = 500, response = BasicErrorResponse)
+    ),
+    tag = "Users"
 )]
 async fn get_users(State(app_data): AppState) -> Result<Json<Vec<TodoUser>>, ErrorResponse> {
     info!("Requested users");
@@ -62,6 +69,17 @@ async fn get_users(State(app_data): AppState) -> Result<Json<Vec<TodoUser>>, Err
 }
 
 /// Creates a user.
+#[utoipa::path(
+    post,
+    path = "/users",
+    request_body = NewUser,
+    responses(
+        (status = 201, description = "The ID of your newly created user", body = InsertedUser),
+        (status = 400, response = BasicErrorResponse),
+        (status = 500, response = BasicErrorResponse)
+    ),
+    tag = "Users"
+)]
 async fn create_user(
     State(app_data): AppState,
     Json(user_to_create): Json<dto::NewUser>,
@@ -97,6 +115,18 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
 }
 
 /// Retrieves a set of tasks owned by a user
+#[utoipa::path(
+    get,
+    path = "/users/{user_id}/tasks",
+    params(
+        ("user_id", description = "ID of the user to look up tasks for")
+    ),
+    responses(
+        (status = 200, description = "List of user's tasks", body = Vec<TodoTask>),
+        (status = 500, response = BasicErrorResponse)
+    ),
+    tag = "Users"
+)]
 async fn get_tasks_for_user(
     State(app_state): AppState,
     Path(user_id): Path<i32>,
@@ -118,6 +148,21 @@ struct GetTaskPath {
 }
 
 /// Retrieves a specific task owned by a user
+
+#[utoipa::path(
+    get,
+    path = "/users/{user_id}/tasks/{task_id}",
+    params(
+        ("user_id", description = "The ID of the user owning the task"),
+        ("task_id", description = "The ID of the task to look up")
+    ),
+    responses(
+        (status = 200, description = "The task for the given user with the given ID", body = TodoTask),
+        (status = 404, response = BasicErrorResponse),
+        (status = 500, response = BasicErrorResponse)
+    ),
+    tag = "Users"
+)]
 async fn get_task_for_user(
     State(app_state): AppState,
     Path(path): Path<GetTaskPath>,
@@ -139,12 +184,29 @@ async fn get_task_for_user(
     Ok(Json(task.map_err(DbErrorResponse::from)?))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
+#[schema(example = json!({
+    "id": 1
+}))]
 struct InsertedTask {
     id: i32,
 }
 
 /// Adds a new task for a user
+#[utoipa::path(
+    post,
+    path = "/users/{user_id}/tasks",
+    params(
+        ("user_id", description = "The ID of the user to create a task for")
+    ),
+    request_body = NewTask,
+    responses(
+        (status = 201, description = "Task successfully created", body = InsertedTask),
+        (status = 400, response = BasicErrorResponse),
+        (status = 500, response = BasicErrorResponse)
+    ),
+    tag = "Users"
+)]
 async fn add_task_for_user(
     State(app_state): AppState,
     Path(user_id): Path<i32>,

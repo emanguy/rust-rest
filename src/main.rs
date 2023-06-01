@@ -14,9 +14,8 @@ mod app_env;
 mod db;
 mod dto;
 mod entity;
-mod routing_utils;
-// mod routes;
 mod routes;
+mod routing_utils;
 
 #[cfg(test)]
 mod integration_test;
@@ -38,8 +37,26 @@ pub struct SharedData {
 type AppState = State<Arc<SharedData>>;
 
 #[derive(OpenApi)]
-#[openapi()]
+#[openapi(
+    components(
+        schemas(routing_utils::ExtraInfo, routing_utils::ValidationErrorSchema),
+        responses(routing_utils::BasicErrorResponse)
+    ),
+    info(
+        title = "Rust Todo API",
+        description = "A simple to-do list API written in Rust"
+    )
+)]
 pub struct TodoApi;
+
+fn build_documentation() -> SwaggerUi {
+    let mut api_docs = TodoApi::openapi();
+    api_docs.merge(routes::UsersApi::openapi());
+    api_docs.merge(entity::SystemEntities::openapi());
+    api_docs.merge(dto::DtoEntities::openapi());
+
+    SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_docs)
+}
 
 #[tokio::main]
 async fn main() {
@@ -50,13 +67,11 @@ async fn main() {
     let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
     let sqlx_db_connection = db::connect_sqlx(&db_url).await;
-
-    let mut api_docs = TodoApi::openapi();
-    api_docs.merge(routes::UsersApi::openapi());
+    let documentation = build_documentation();
 
     let router = Router::new()
         .route("/hello", get(routes::hello))
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_docs))
+        .merge(documentation)
         .nest("/users", routes::user_routes())
         .nest("/tasks", routes::task_routes())
         .with_state(Arc::new(SharedData {
