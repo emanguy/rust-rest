@@ -30,7 +30,7 @@ fn create_user_request() -> Request<Body> {
 #[tokio::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_create_user() {
-    let router = Router::new().nest("/users", routes::user_routes());
+    let router = Router::new().merge(routes::user_routes());
     let (mut app, _) = test_util::prepare_application(router).await;
     let test_req = create_user_request();
 
@@ -51,7 +51,7 @@ async fn can_create_user() {
 #[tokio::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_retrieve_user() {
-    let router = Router::new().nest("/users", routes::user_routes());
+    let router = Router::new().merge(routes::user_routes());
     let (mut app, _) = test_util::prepare_application(router).await;
     let create_user_req = create_user_request();
 

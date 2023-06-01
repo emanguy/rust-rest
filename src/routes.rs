@@ -37,11 +37,11 @@ pub struct UsersApi;
 /// Builds a router for all the user routes
 pub fn user_routes() -> Router<Arc<SharedData>> {
     Router::new()
-        .route("/", get(get_users))
-        .route("/", post(create_user))
-        .route("/:user_id/tasks", get(get_tasks_for_user))
-        .route("/:user_id/tasks/:task_id", get(get_task_for_user))
-        .route("/:user_id/tasks", post(add_task_for_user))
+        .route("/users", get(get_users))
+        .route("/users", post(create_user))
+        .route("/users/:user_id/tasks", get(get_tasks_for_user))
+        .route("/users/:user_id/tasks/:task_id", get(get_task_for_user))
+        .route("/users/:user_id/tasks", post(add_task_for_user))
 }
 
 /// Retrieves a list of all the users in the system.

@@ -72,8 +72,8 @@ async fn main() {
     let router = Router::new()
         .route("/hello", get(routes::hello))
         .merge(documentation)
-        .nest("/users", routes::user_routes())
-        .nest("/tasks", routes::task_routes())
+        .merge(routes::user_routes())
+        .merge(routes::task_routes())
         .with_state(Arc::new(SharedData {
             db: sqlx_db_connection,
         }));
