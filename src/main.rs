@@ -52,6 +52,7 @@ pub struct TodoApi;
 fn build_documentation() -> SwaggerUi {
     let mut api_docs = TodoApi::openapi();
     api_docs.merge(routes::UsersApi::openapi());
+    api_docs.merge(routes::TasksApi::openapi());
     api_docs.merge(entity::SystemEntities::openapi());
     api_docs.merge(dto::DtoEntities::openapi());
 

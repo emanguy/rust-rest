@@ -107,6 +107,10 @@ async fn create_user(
     ))
 }
 
+#[derive(OpenApi)]
+#[openapi(paths(update_task, delete_task))]
+pub(crate) struct TasksApi;
+
 /// Adds routes under "/tasks" and routes for user-owned tasks to the application router
 pub fn task_routes() -> Router<Arc<SharedData>> {
     Router::new()
@@ -237,6 +241,19 @@ async fn add_task_for_user(
 }
 
 /// Updates the content of a task
+#[utoipa::path(
+    patch,
+    path = "/tasks/{task_id}",
+    params(
+        ("task_id", description = "The ID of the task to update")
+    ),
+    request_body = UpdateTask,
+    responses(
+        (status = 200, description = "Task successfully updated"),
+        (status = 500, response = BasicErrorResponse)
+    ),
+    tag = "Tasks",
+)]
 async fn update_task(
     State(app_state): AppState,
     Path(task_id): Path<i32>,
@@ -259,6 +276,18 @@ async fn update_task(
 }
 
 /// Deletes a task
+#[utoipa::path(
+    delete,
+    path = "/tasks/{task_id}",
+    params(
+        ("task_id", description = "The ID of teh task to delete")
+    ),
+    responses(
+        (status = 200, description = "Task successfully deleted"),
+        (status = 500, response = BasicErrorResponse)
+    ),
+    tag = "Tasks"
+)]
 async fn delete_task(
     State(app_state): AppState,
     Path(task_id): Path<i32>,
