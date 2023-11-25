@@ -1,4 +1,3 @@
-use crate::domain::DrivenPortError;
 use anyhow::anyhow;
 
 pub enum Connectivity {
@@ -7,12 +6,12 @@ pub enum Connectivity {
 }
 
 impl Connectivity {
-    pub fn blow_up_if_disconnected(&self) -> Result<(), DrivenPortError> {
+    pub fn blow_up_if_disconnected(&self) -> Result<(), anyhow::Error> {
         match self {
             Self::Connected => Ok(()),
-            Self::Disconnected => Err(DrivenPortError::CommsFailure(anyhow!(
+            Self::Disconnected => Err(anyhow!(
                 "could not connect to service!"
-            ))),
+            )),
         }
     }
 }

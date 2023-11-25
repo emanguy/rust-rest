@@ -44,7 +44,7 @@ where
     UDetect: DetectUser,
     TReader: UserTaskReader,
 {
-    verify_user_exists(user_detect, user_id, "look up a user's tasks").await?;
+    verify_user_exists(user_detect, user_id).await?;
 
     task_reader
         .tasks_for_user(user_id)
@@ -62,7 +62,7 @@ where
     UDetect: DetectUser,
     TReader: UserTaskReader,
 {
-    verify_user_exists(user_detect, user_id, "look up a user's task by id").await?;
+    verify_user_exists(user_detect, user_id).await?;
 
     task_reader
         .user_task_by_id(user_id, task_id)
@@ -81,7 +81,7 @@ where
     UTWriter: UserTaskWriter,
 {
     new_task.validate().map_err(Error::Invalid)?;
-    verify_user_exists(user_detect, user_id, "create a task for a user").await?;
+    verify_user_exists(user_detect, user_id).await?;
 
     task_writer
         .create_task_for_user(user_id, new_task)
