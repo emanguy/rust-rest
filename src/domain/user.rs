@@ -71,11 +71,12 @@ pub(super) enum UserExistsErr {
 }
 
 pub(super) async fn verify_user_exists(
-    user_detect: &impl driven_ports::DetectUser,
     id: u32,
+    user_detect: &impl driven_ports::DetectUser,
+    external_cxn: &impl ExternalConnectivity,
 ) -> Result<(), UserExistsErr> {
     let does_user_exist = user_detect
-        .user_exists(id)
+        .user_exists(id, external_cxn)
         .await?;
 
     if does_user_exist {
@@ -89,7 +90,7 @@ pub(super) async fn verify_user_exists(
 impl <URead, UWrite> driving_ports::UserPort for UserService<URead, UWrite>
     where URead: UserReader,
           UWrite: UserWriter {
-    async fn get_users(ext_cxn: &impl ExternalConnectivity) -> Result<Vec<TodoUser>, ()> {
+    async fn get_users(&self, ext_cxn: &impl ExternalConnectivity) -> Result<Vec<TodoUser>, ()> {
         let all_users_result = URead::get_all(ext_cxn).await;
         if let Err(ref port_err) = all_users_result {
             log::error!("User fetch failure: {port_err}");
@@ -98,7 +99,7 @@ impl <URead, UWrite> driving_ports::UserPort for UserService<URead, UWrite>
         all_users_result.map_err(|err| err.into_error_trying_to("look up all users"))
     }
 
-    async fn create_user(new_user: &CreateUser, ext_cxn: &impl ExternalConnectivity) -> Result<u32, ()> {
+    async fn create_user(&self, new_user: &CreateUser, ext_cxn: &impl ExternalConnectivity) -> Result<u32, ()> {
         UWrite::create_user(new_user, ext_cxn)
             .await
             .map_err(|err| err.into_error_trying_to("create a new user"))
