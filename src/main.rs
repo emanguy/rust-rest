@@ -18,9 +18,9 @@ mod persistence;
 mod routes;
 mod routing_utils;
 
+mod external_connections;
 #[cfg(test)]
 mod integration_test;
-mod external_connections;
 
 /// Configures the logging system for the application. Pulls configuration from the [LOG_LEVEL](app_env::LOG_LEVEL)
 /// environment variable. Sets log level to "INFO" for all modules and sqlx to "WARN" by default.

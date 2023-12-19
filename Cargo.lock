@@ -359,9 +359,9 @@ dependencies = [
 
 [[package]]
 name = "futures-core"
-version = "0.3.21"
+version = "0.3.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c09fd04b7e4073ac7156a9539b57a484a8ea920f79c7c675d05d289ab6110d3"
+checksum = "eb1d22c66e66d9d72e1758f0bd7d4fd0bee04cad842ee34587d68c07e45d088c"
 
 [[package]]
 name = "futures-intrusive"
@@ -1055,6 +1055,7 @@ dependencies = [
  "derive_more",
  "dotenv",
  "env_logger",
+ "futures-core",
  "hyper",
  "lazy_static",
  "log",

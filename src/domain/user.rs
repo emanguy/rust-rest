@@ -1,8 +1,7 @@
-use std::sync::Arc;
-use crate::domain::{DrivenPortError, Error, Resource};
-use async_trait::async_trait;
-use crate::domain::user::driven_ports::{UserReader, UserWriter};
+use crate::domain::Error;
 use crate::external_connections::ExternalConnectivity;
+use async_trait::async_trait;
+use std::sync::Arc;
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct TodoUser {
@@ -19,23 +18,38 @@ pub struct UserDoesNotExistError {
 
 pub mod driven_ports {
     use super::*;
-    use async_trait::async_trait;
     use crate::external_connections::ExternalConnectivity;
+    use async_trait::async_trait;
 
     #[async_trait]
     pub trait UserReader {
-        async fn get_all(&self, ext_cxn: &impl ExternalConnectivity) -> Result<Vec<TodoUser>, anyhow::Error>;
-        async fn get_by_id(&self, id: u32, ext_cxn: &impl ExternalConnectivity) -> Result<Option<TodoUser>, anyhow::Error>;
+        async fn get_all(
+            &self,
+            ext_cxn: &impl ExternalConnectivity,
+        ) -> Result<Vec<TodoUser>, anyhow::Error>;
+        async fn get_by_id(
+            &self,
+            id: u32,
+            ext_cxn: &impl ExternalConnectivity,
+        ) -> Result<Option<TodoUser>, anyhow::Error>;
     }
 
     #[async_trait]
     pub trait UserWriter {
-        async fn create_user(&self, user: &CreateUser, ext_cxn: &impl ExternalConnectivity) -> Result<u32, anyhow::Error>;
+        async fn create_user(
+            &self,
+            user: &CreateUser,
+            ext_cxn: &impl ExternalConnectivity,
+        ) -> Result<u32, anyhow::Error>;
     }
 
     #[async_trait]
     pub trait DetectUser {
-        async fn user_exists(&self, user_id: u32, ext_cxn: &impl ExternalConnectivity) -> Result<bool, anyhow::Error>;
+        async fn user_exists(
+            &self,
+            user_id: u32,
+            ext_cxn: &impl ExternalConnectivity,
+        ) -> Result<bool, anyhow::Error>;
     }
 }
 
@@ -46,20 +60,26 @@ pub struct CreateUser {
 
 pub mod driving_ports {
     use super::*;
-    use async_trait::async_trait;
     use crate::external_connections::ExternalConnectivity;
+    use async_trait::async_trait;
 
     #[async_trait]
     pub trait UserPort {
-        async fn get_users(&self, ext_cxn: &impl ExternalConnectivity) -> Result<Vec<TodoUser>, ()>;
-        async fn create_user(&self, new_user: &CreateUser, ext_cxn: &impl ExternalConnectivity) -> Result<u32, ()>;
+        async fn get_users(
+            &self,
+            ext_cxn: &impl ExternalConnectivity,
+            u_reader: &impl driven_ports::UserReader,
+        ) -> Result<Vec<TodoUser>, ()>;
+        async fn create_user(
+            &self,
+            new_user: &CreateUser,
+            ext_cxn: &impl ExternalConnectivity,
+            u_writer: &impl driven_ports::UserWriter,
+        ) -> Result<u32, ()>;
     }
 }
 
-
-struct UserService<URead, UWrite>
-    where URead: driven_ports::UserReader,
-          UWrite: driven_ports::UserWriter {}
+struct UserService {}
 
 #[derive(Debug, Error)]
 pub(super) enum UserExistsErr {
@@ -67,17 +87,15 @@ pub(super) enum UserExistsErr {
     UserDoesNotExist(u32),
 
     #[error(transparent)]
-    PortError(#[from] anyhow::Error)
+    PortError(#[from] anyhow::Error),
 }
 
 pub(super) async fn verify_user_exists(
     id: u32,
-    user_detect: &impl driven_ports::DetectUser,
     external_cxn: &impl ExternalConnectivity,
+    user_detect: &impl driven_ports::DetectUser,
 ) -> Result<(), UserExistsErr> {
-    let does_user_exist = user_detect
-        .user_exists(id, external_cxn)
-        .await?;
+    let does_user_exist = user_detect.user_exists(id, external_cxn).await?;
 
     if does_user_exist {
         Ok(())
@@ -87,11 +105,13 @@ pub(super) async fn verify_user_exists(
 }
 
 #[async_trait]
-impl <URead, UWrite> driving_ports::UserPort for UserService<URead, UWrite>
-    where URead: UserReader,
-          UWrite: UserWriter {
-    async fn get_users(&self, ext_cxn: &impl ExternalConnectivity) -> Result<Vec<TodoUser>, ()> {
-        let all_users_result = URead::get_all(ext_cxn).await;
+impl driving_ports::UserPort for UserService {
+    async fn get_users(
+        &self,
+        ext_cxn: &impl ExternalConnectivity,
+        u_reader: &impl driven_ports::UserReader,
+    ) -> Result<Vec<TodoUser>, ()> {
+        let all_users_result = u_reader.get_all(ext_cxn).await;
         if let Err(ref port_err) = all_users_result {
             log::error!("User fetch failure: {port_err}");
         }
@@ -99,8 +119,14 @@ impl <URead, UWrite> driving_ports::UserPort for UserService<URead, UWrite>
         all_users_result.map_err(|err| err.into_error_trying_to("look up all users"))
     }
 
-    async fn create_user(&self, new_user: &CreateUser, ext_cxn: &impl ExternalConnectivity) -> Result<u32, ()> {
-        UWrite::create_user(new_user, ext_cxn)
+    async fn create_user(
+        &self,
+        new_user: &CreateUser,
+        ext_cxn: &impl ExternalConnectivity,
+        u_writer: &impl driven_ports::UserWriter,
+    ) -> Result<u32, ()> {
+        u_writer
+            .create_user(new_user, ext_cxn)
             .await
             .map_err(|err| err.into_error_trying_to("create a new user"))
     }
@@ -109,17 +135,15 @@ impl <URead, UWrite> driving_ports::UserPort for UserService<URead, UWrite>
 #[cfg(test)]
 mod tests {
     use super::*;
-
-
 }
 
 #[cfg(test)]
 pub(super) mod test_util {
     use super::*;
     use crate::domain::test_util::Connectivity;
+    use crate::domain::user::driven_ports::DetectUser;
     use std::collections::HashSet;
     use std::sync::RwLock;
-    use crate::domain::user::driven_ports::DetectUser;
 
     pub struct InMemoryUserPersistence {
         highest_user_id: u32,
@@ -138,8 +162,12 @@ pub(super) mod test_util {
     }
 
     #[async_trait]
-    impl UserWriter for RwLock<InMemoryUserPersistence> {
-        async fn create_user(&self, user: &CreateUser, _: &impl ExternalConnectivity) -> Result<u32, anyhow::Error> {
+    impl driven_ports::UserWriter for RwLock<InMemoryUserPersistence> {
+        async fn create_user(
+            &self,
+            user: &CreateUser,
+            _: &impl ExternalConnectivity,
+        ) -> Result<u32, anyhow::Error> {
             let mut persister = self.write().expect("user create mutex poisoned");
             persister.connected.blow_up_if_disconnected()?;
 
@@ -156,8 +184,11 @@ pub(super) mod test_util {
     }
 
     #[async_trait]
-    impl UserReader for RwLock<InMemoryUserPersistence> {
-        async fn get_all(&self, _: &impl ExternalConnectivity) -> Result<Vec<TodoUser>, anyhow::Error> {
+    impl driven_ports::UserReader for RwLock<InMemoryUserPersistence> {
+        async fn get_all(
+            &self,
+            _: &impl ExternalConnectivity,
+        ) -> Result<Vec<TodoUser>, anyhow::Error> {
             let persister = self.read().expect("user read rwlock poisoned");
             persister.connected.blow_up_if_disconnected()?;
 
@@ -172,7 +203,11 @@ pub(super) mod test_util {
                 .collect())
         }
 
-        async fn get_by_id(&self, id: u32, _: &impl ExternalConnectivity) -> Result<Option<TodoUser>, anyhow::Error> {
+        async fn get_by_id(
+            &self,
+            id: u32,
+            _: &impl ExternalConnectivity,
+        ) -> Result<Option<TodoUser>, anyhow::Error> {
             let persister = self.read().expect("user read rwlock poisoned");
             persister.connected.blow_up_if_disconnected()?;
 
@@ -226,7 +261,11 @@ pub(super) mod test_util {
 
     #[async_trait]
     impl DetectUser for RwLock<InMemoryUserDetector> {
-        async fn user_exists(&self, user_id: u32, _: &impl ExternalConnectivity) -> Result<bool, anyhow::Error> {
+        async fn user_exists(
+            &self,
+            user_id: u32,
+            _: &impl ExternalConnectivity,
+        ) -> Result<bool, anyhow::Error> {
             let detector = self.read().expect("user detect rwlock poisoned");
             detector.connectivity.blow_up_if_disconnected()?;
 

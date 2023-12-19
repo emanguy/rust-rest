@@ -9,9 +9,7 @@ impl Connectivity {
     pub fn blow_up_if_disconnected(&self) -> Result<(), anyhow::Error> {
         match self {
             Self::Connected => Ok(()),
-            Self::Disconnected => Err(anyhow!(
-                "could not connect to service!"
-            )),
+            Self::Disconnected => Err(anyhow!("could not connect to service!")),
         }
     }
 }
