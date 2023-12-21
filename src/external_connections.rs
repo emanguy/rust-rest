@@ -4,9 +4,8 @@ use std::error::Error;
 use std::future::Future;
 use thiserror::Error;
 
-
 #[async_trait]
-pub trait ExternalConnectivity {
+pub trait ExternalConnectivity: Sync {
     async fn database_cxn(&self) -> &mut PgConnection;
 }
 
@@ -63,57 +62,88 @@ where
 }
 
 #[cfg(test)]
-pub mod test_util {
-    use std::convert::Infallible;
-    use crate::external_connections::{ExternalConnectivity, Transactable, TransactionHandle, with_transaction};
-    use async_trait::async_trait;
-    use mockall::mock;
-    use sqlx::{Acquire, Database, Error, Executor, PgConnection, PgExecutor, Postgres, Transaction};
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
-    use futures_core;
+mod with_transaction_test {
+    use super::*;
+    use speculoos::prelude::*;
+    use thiserror::Error;
 
-    mock!{
-        DbConn {}
+    // I need this to help provide a size for the error in the async block used in the following test
+    #[derive(Debug, Error)]
+    #[error("Abcde")]
+    struct SampleErr;
 
-        impl <'c> Acquire<'c> for DbConn {
-            type Database = Postgres;
-            type Connection = &'c mut <Postgres as Database>::Connection;
+    #[tokio::test]
+    async fn commits_on_success() {
+        let ext_cxn = test_util::FakeExternalConnectivity::new();
+        let tx_result = with_transaction(&ext_cxn, |_tx_cxn| async {
+            println!("Woohoo!");
+            Ok::<(), SampleErr>(())
+        })
+        .await;
 
-            fn acquire(self) -> futures_core::future::BoxFuture<'c, Result<Self::Connection, Error>>;
-
-            fn begin(self) -> futures_core::future::BoxFuture<'c, Result<Transaction<'c, Self::Database>, Error>>;
-        }
+        assert_that!(tx_result).is_ok();
+        assert_that!(ext_cxn.did_transaction_commit()).is_true();
     }
 
-    struct FakeExternalConnectivity {
-        db_connection: Arc<MockDbConn>,
+    #[tokio::test]
+    async fn does_not_commit_on_failure() {
+        let ext_cxn = test_util::FakeExternalConnectivity::new();
+        let tx_result = with_transaction(&ext_cxn, |_tx_cxn| async {
+            println!("Whoopsie!");
+            Err::<(), SampleErr>(SampleErr)
+        })
+        .await;
+
+        assert_that!(tx_result)
+            .is_err()
+            .matches(|inner_err| matches!(inner_err, TxOrSourceError::Source(SampleErr)));
+        assert_that!(ext_cxn.did_transaction_commit()).is_false();
+    }
+}
+
+#[cfg(test)]
+pub mod test_util {
+    use crate::external_connections::{
+        with_transaction, ExternalConnectivity, Transactable, TransactionHandle,
+    };
+    use async_trait::async_trait;
+    use futures_core;
+    use sqlx::{
+        Acquire, ConnectOptions, Connection, Database, Error, Executor, PgConnection, PgExecutor,
+        Postgres, Transaction,
+    };
+    use std::convert::Infallible;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+    use thiserror::Error;
+
+    pub struct FakeExternalConnectivity {
         is_transacting: bool,
         downstream_transaction_committed: Arc<AtomicBool>,
     }
 
     impl FakeExternalConnectivity {
-        fn new() -> Self {
+        pub fn new() -> Self {
             Self {
-                db_connection: Arc::new(MockDbConn::new()),
                 is_transacting: false,
                 downstream_transaction_committed: Arc::new(AtomicBool::new(false)),
             }
         }
 
-        fn is_transacting(&self) -> bool {
+        pub fn is_transacting(&self) -> bool {
             self.is_transacting
         }
 
-        fn did_transaction_commit(&self) -> bool {
+        pub fn did_transaction_commit(&self) -> bool {
             self.downstream_transaction_committed.load(Ordering::SeqCst)
         }
     }
 
     #[async_trait]
     impl ExternalConnectivity for FakeExternalConnectivity {
+        #[allow(clippy::diverging_sub_expression)]
         async fn database_cxn(&self) -> &mut PgConnection {
-            self.db_connection.acquire().await.unwrap()
+            panic!("You cannot actually connect to the database during a test.");
         }
     }
 
@@ -136,24 +166,11 @@ pub mod test_util {
     impl Transactable<FakeExternalConnectivity> for FakeExternalConnectivity {
         async fn start_transaction(&self) -> FakeExternalConnectivity {
             FakeExternalConnectivity {
-                db_connection: Arc::clone(&self.db_connection),
                 is_transacting: true,
                 downstream_transaction_committed: Arc::clone(
                     &self.downstream_transaction_committed,
                 ),
             }
         }
-    }
-
-    #[tokio::test]
-    async fn with_transaction_commits() {
-        let ext_cxn = FakeExternalConnectivity::new();
-        let tx_result = with_transaction(&ext_cxn, |tx_cxn| {
-            println!("Woohoo!");
-            Ok(())
-        }).await;
-
-        assert!(tx_result.is_ok());
-        assert!(ext_cxn.did_transaction_commit());
     }
 }
