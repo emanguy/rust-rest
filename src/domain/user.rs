@@ -11,12 +11,6 @@ pub struct TodoUser {
     pub last_name: String,
 }
 
-#[derive(Debug, Error)]
-#[error("User with id {id} does not exist")]
-pub struct UserDoesNotExistError {
-    pub id: u32,
-}
-
 pub mod driven_ports {
     use super::*;
     use crate::external_connections::ExternalConnectivity;
@@ -100,7 +94,7 @@ pub mod driving_ports {
     }
 }
 
-struct UserService {}
+pub struct UserService {}
 
 #[derive(Debug, Error)]
 pub(super) enum UserExistsErr {
@@ -224,11 +218,10 @@ impl driving_ports::UserPort for UserService {
 mod user_service_tests {
     use super::*;
     use crate::domain::test_util::Connectivity;
-    use crate::domain::user::driven_ports::UserWriter;
-    use crate::domain::user::driving_ports::UserPort;
     use crate::external_connections;
     use speculoos::prelude::*;
     use std::sync::RwLock;
+    use crate::domain::user::driving_ports::UserPort;
 
     #[tokio::test]
     async fn get_users_can_fetch_users() {
@@ -360,7 +353,7 @@ pub(super) mod test_util {
     use crate::domain::test_util::Connectivity;
     use crate::domain::user::driven_ports::{DetectUser, UserDescription};
     use anyhow::Error;
-    use std::collections::{HashMap, HashSet};
+    
     use std::sync::RwLock;
 
     pub struct InMemoryUserPersistence {

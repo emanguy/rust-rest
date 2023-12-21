@@ -6,16 +6,23 @@ use thiserror::Error;
 
 #[async_trait]
 pub trait ExternalConnectivity: Sync {
-    async fn database_cxn(&self) -> &mut PgConnection;
+    type Handle: ConnectionHandle;
+    type Error;
+
+    async fn database_cxn(&self) -> Result<Self::Handle, Self::Error>;
+}
+
+pub trait ConnectionHandle {
+    fn borrow_connection(&mut self) -> &mut PgConnection;
 }
 
 #[async_trait]
-pub trait Transactable<Handle: TransactionHandle> {
+pub trait Transactable<Handle: TransactionHandle>: Sync {
     async fn start_transaction(&self) -> Handle;
 }
 
 #[async_trait]
-pub trait TransactionHandle {
+pub trait TransactionHandle: Sync {
     type Error: Error;
 
     async fn commit(self) -> Result<(), Self::Error>;
@@ -32,7 +39,7 @@ pub enum TxOrSourceError<SourceValue, SourceErr: Error, TxErr: Error> {
     },
 }
 
-async fn with_transaction<Handle, TxAble, Fut, Fn, Ret, Err>(
+pub async fn with_transaction<Handle, TxAble, Fut, Fn, Ret, Err>(
     tx_origin: &TxAble,
     transaction_context: Fn,
 ) -> Result<Ret, TxOrSourceError<Ret, Err, Handle::Error>>
@@ -104,18 +111,17 @@ mod with_transaction_test {
 #[cfg(test)]
 pub mod test_util {
     use crate::external_connections::{
-        with_transaction, ExternalConnectivity, Transactable, TransactionHandle,
+        ExternalConnectivity, Transactable, TransactionHandle,
     };
     use async_trait::async_trait;
-    use futures_core;
+    
     use sqlx::{
-        Acquire, ConnectOptions, Connection, Database, Error, Executor, PgConnection, PgExecutor,
-        Postgres, Transaction,
+        PgConnection,
     };
     use std::convert::Infallible;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-    use thiserror::Error;
+    
 
     pub struct FakeExternalConnectivity {
         is_transacting: bool,
@@ -139,10 +145,17 @@ pub mod test_util {
         }
     }
 
+    struct MockHandle {}
+
+    // TODO implement ConnectionHandle for MockHandle then return a MockHandle from database_cxn
+
     #[async_trait]
     impl ExternalConnectivity for FakeExternalConnectivity {
+        type Handle = ();
+        type Error = ();
+
         #[allow(clippy::diverging_sub_expression)]
-        async fn database_cxn(&self) -> &mut PgConnection {
+        async fn database_cxn(&self) -> Result<(), ()> {
             panic!("You cannot actually connect to the database during a test.");
         }
     }
