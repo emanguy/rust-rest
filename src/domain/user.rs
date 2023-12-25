@@ -20,12 +20,12 @@ pub mod driven_ports {
     pub trait UserReader: Sync {
         async fn get_all(
             &self,
-            ext_cxn: &impl ExternalConnectivity,
+            ext_cxn: &impl ExternalConnectivity<'_>,
         ) -> Result<Vec<TodoUser>, anyhow::Error>;
         async fn get_by_id(
             &self,
             id: u32,
-            ext_cxn: &impl ExternalConnectivity,
+            ext_cxn: &impl ExternalConnectivity<'_>,
         ) -> Result<Option<TodoUser>, anyhow::Error>;
     }
 
@@ -34,7 +34,7 @@ pub mod driven_ports {
         async fn create_user(
             &self,
             user: &CreateUser,
-            ext_cxn: &impl ExternalConnectivity,
+            ext_cxn: &impl ExternalConnectivity<'_>,
         ) -> Result<u32, anyhow::Error>;
     }
 
@@ -48,13 +48,13 @@ pub mod driven_ports {
         async fn user_exists(
             &self,
             user_id: u32,
-            ext_cxn: &impl ExternalConnectivity,
+            ext_cxn: &impl ExternalConnectivity<'_>,
         ) -> Result<bool, anyhow::Error>;
 
         async fn user_with_name_exists<'strings>(
             &self,
             description: UserDescription<'strings>,
-            ext_cxn: &impl ExternalConnectivity,
+            ext_cxn: &impl ExternalConnectivity<'_>,
         ) -> Result<bool, anyhow::Error>;
     }
 }
@@ -81,13 +81,13 @@ pub mod driving_ports {
     pub trait UserPort {
         async fn get_users(
             &self,
-            ext_cxn: &impl ExternalConnectivity,
+            ext_cxn: &impl ExternalConnectivity<'_>,
             u_reader: &impl driven_ports::UserReader,
         ) -> Result<Vec<TodoUser>, anyhow::Error>;
         async fn create_user(
             &self,
             new_user: &CreateUser,
-            ext_cxn: &impl ExternalConnectivity,
+            ext_cxn: &impl ExternalConnectivity<'_>,
             u_writer: &impl driven_ports::UserWriter,
             u_detect: &impl driven_ports::DetectUser,
         ) -> Result<u32, CreateUserError>;
@@ -107,7 +107,7 @@ pub(super) enum UserExistsErr {
 
 pub(super) async fn verify_user_exists(
     id: u32,
-    external_cxn: &impl ExternalConnectivity,
+    external_cxn: &impl ExternalConnectivity<'_>,
     user_detect: &impl driven_ports::DetectUser,
 ) -> Result<(), UserExistsErr> {
     let does_user_exist = user_detect.user_exists(id, external_cxn).await?;
@@ -176,7 +176,7 @@ mod verify_user_exists_tests {
 impl driving_ports::UserPort for UserService {
     async fn get_users(
         &self,
-        ext_cxn: &impl ExternalConnectivity,
+        ext_cxn: &impl ExternalConnectivity<'_>,
         u_reader: &impl driven_ports::UserReader,
     ) -> Result<Vec<TodoUser>, anyhow::Error> {
         let all_users_result = u_reader.get_all(ext_cxn).await;
@@ -190,7 +190,7 @@ impl driving_ports::UserPort for UserService {
     async fn create_user(
         &self,
         new_user: &CreateUser,
-        ext_cxn: &impl ExternalConnectivity,
+        ext_cxn: &impl ExternalConnectivity<'_>,
         u_writer: &impl driven_ports::UserWriter,
         u_detect: &impl driven_ports::DetectUser,
     ) -> Result<u32, CreateUserError> {

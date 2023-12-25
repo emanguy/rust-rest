@@ -5,11 +5,11 @@ use std::future::Future;
 use thiserror::Error;
 
 #[async_trait]
-pub trait ExternalConnectivity: Sync {
+pub trait ExternalConnectivity<'tx>: Sync {
     type Handle: ConnectionHandle;
     type Error;
 
-    async fn database_cxn(&self) -> Result<Self::Handle, Self::Error>;
+    async fn database_cxn(&'tx mut self) -> Result<Self::Handle, Self::Error>;
 }
 
 pub trait ConnectionHandle {
@@ -150,12 +150,12 @@ pub mod test_util {
     // TODO implement ConnectionHandle for MockHandle then return a MockHandle from database_cxn
 
     #[async_trait]
-    impl ExternalConnectivity for FakeExternalConnectivity {
+    impl ExternalConnectivity<'_> for FakeExternalConnectivity {
         type Handle = ();
         type Error = ();
 
         #[allow(clippy::diverging_sub_expression)]
-        async fn database_cxn(&self) -> Result<(), ()> {
+        async fn database_cxn(&mut self) -> Result<(), ()> {
             panic!("You cannot actually connect to the database during a test.");
         }
     }
