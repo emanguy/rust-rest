@@ -218,10 +218,10 @@ impl driving_ports::UserPort for UserService {
 mod user_service_tests {
     use super::*;
     use crate::domain::test_util::Connectivity;
+    use crate::domain::user::driving_ports::UserPort;
     use crate::external_connections;
     use speculoos::prelude::*;
     use std::sync::RwLock;
-    use crate::domain::user::driving_ports::UserPort;
 
     #[tokio::test]
     async fn get_users_can_fetch_users() {
@@ -353,7 +353,7 @@ pub(super) mod test_util {
     use crate::domain::test_util::Connectivity;
     use crate::domain::user::driven_ports::{DetectUser, UserDescription};
     use anyhow::Error;
-    
+
     use std::sync::RwLock;
 
     pub struct InMemoryUserPersistence {
@@ -397,7 +397,7 @@ pub(super) mod test_util {
         async fn create_user(
             &self,
             user: &CreateUser,
-            _: &impl ExternalConnectivity,
+            _: &impl ExternalConnectivity<'_>,
         ) -> Result<u32, anyhow::Error> {
             let mut persister = self.write().expect("user create mutex poisoned");
             persister.connectivity.blow_up_if_disconnected()?;
@@ -418,7 +418,7 @@ pub(super) mod test_util {
     impl driven_ports::UserReader for RwLock<InMemoryUserPersistence> {
         async fn get_all(
             &self,
-            _: &impl ExternalConnectivity,
+            _: &impl ExternalConnectivity<'_>,
         ) -> Result<Vec<TodoUser>, anyhow::Error> {
             let persister = self.read().expect("user read rwlock poisoned");
             persister.connectivity.blow_up_if_disconnected()?;
@@ -437,7 +437,7 @@ pub(super) mod test_util {
         async fn get_by_id(
             &self,
             id: u32,
-            _: &impl ExternalConnectivity,
+            _: &impl ExternalConnectivity<'_>,
         ) -> Result<Option<TodoUser>, anyhow::Error> {
             let persister = self.read().expect("user read rwlock poisoned");
             persister.connectivity.blow_up_if_disconnected()?;
@@ -480,7 +480,7 @@ pub(super) mod test_util {
         async fn user_exists(
             &self,
             user_id: u32,
-            _: &impl ExternalConnectivity,
+            _: &impl ExternalConnectivity<'_>,
         ) -> Result<bool, anyhow::Error> {
             let detector = self.read().expect("user detect rwlock poisoned");
             detector.connectivity.blow_up_if_disconnected()?;
@@ -491,7 +491,7 @@ pub(super) mod test_util {
         async fn user_with_name_exists<'strings>(
             &self,
             description: UserDescription<'strings>,
-            _: &impl ExternalConnectivity,
+            _: &impl ExternalConnectivity<'_>,
         ) -> Result<bool, Error> {
             let detector = self.read().expect("user detect rwlock poisoned");
             detector.connectivity.blow_up_if_disconnected()?;

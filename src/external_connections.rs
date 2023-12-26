@@ -1,13 +1,14 @@
 use async_trait::async_trait;
 use sqlx::PgConnection;
 use std::error::Error;
+use std::fmt::{Debug, Display};
 use std::future::Future;
 use thiserror::Error;
 
 #[async_trait]
 pub trait ExternalConnectivity<'tx>: Sync {
     type Handle: ConnectionHandle;
-    type Error;
+    type Error: Debug + Display;
 
     async fn database_cxn(&'tx mut self) -> Result<Self::Handle, Self::Error>;
 }
@@ -17,40 +18,66 @@ pub trait ConnectionHandle {
 }
 
 #[async_trait]
-pub trait Transactable<Handle: TransactionHandle>: Sync {
-    async fn start_transaction(&self) -> Handle;
+pub trait Transactable<'tx, Handle: TransactionHandle>: Sync {
+    type Error: Debug + Display;
+
+    async fn start_transaction(&'tx self) -> Result<Handle, Self::Error>;
 }
 
 #[async_trait]
 pub trait TransactionHandle: Sync {
-    type Error: Error;
+    type Error: Debug + Display;
 
     async fn commit(self) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug, Error)]
-pub enum TxOrSourceError<SourceValue, SourceErr: Error, TxErr: Error> {
+pub enum TxOrSourceError<SourceValue, SourceErr, TxBeginErr, TxCommitErr>
+where
+    SourceErr: Debug + Display,
+    TxBeginErr: Debug + Display,
+    TxCommitErr: Debug + Display,
+{
     #[error(transparent)]
     Source(SourceErr),
+    #[error("Failed to start the transaction: {0}")]
+    TxBegin(TxBeginErr),
     #[error("Got a successful result, but the database transaction failed: {transaction_err}")]
     TxCommit {
         successful_result: SourceValue,
-        transaction_err: TxErr,
+        transaction_err: TxCommitErr,
     },
 }
 
-pub async fn with_transaction<Handle, TxAble, Fut, Fn, Ret, Err>(
-    tx_origin: &TxAble,
+// TxAble = "The thing that can begin a transaction"
+// ErrBegin = "The error returned if we fail to start a transaction"
+// Handle = "The thing that can give you a database connection"
+// ErrCommit = "The error returned if we fail to commit the transaction"
+// Fn = "The function which contains code executed in a database transaction"
+// Fut = "The future returned from the function passed via transaction_context which may be awaited for the return value"
+// Ret = "The type Fut resolves to if the transaction was a success"
+// ErrSource = "The error Fut resolves to if the user returns an error from Fn"
+/// Accepts [tx_origin] which can start a database transaction. It then starts a transaction,
+/// invokes [transaction_context] with the started transaction. When [transaction_context] completes,
+/// the transaction handle passed to it is committed as long as [transaction_context] does not return
+/// a [Result::Err].
+pub async fn with_transaction<'tx, TxAble, ErrBegin, Handle, ErrCommit, Fn, Fut, Ret, ErrSource>(
+    tx_origin: &'tx TxAble,
     transaction_context: Fn,
-) -> Result<Ret, TxOrSourceError<Ret, Err, Handle::Error>>
+) -> Result<Ret, TxOrSourceError<Ret, ErrSource, TxAble::Error, Handle::Error>>
 where
-    Handle: TransactionHandle,
-    TxAble: Transactable<Handle>,
-    Err: Error,
-    Fut: Future<Output = Result<Ret, Err>>,
+    TxAble: Transactable<'tx, Handle, Error = ErrBegin>,
+    ErrBegin: Debug + Display,
+    Handle: TransactionHandle<Error = ErrCommit>,
+    ErrCommit: Debug + Display,
     Fn: FnOnce(&Handle) -> Fut,
+    Fut: Future<Output = Result<Ret, ErrSource>>,
+    ErrSource: Debug + Display,
 {
-    let tx_handle = tx_origin.start_transaction().await;
+    let tx_handle = tx_origin
+        .start_transaction()
+        .await
+        .map_err(|err| TxOrSourceError::TxBegin(err))?;
     let ret_val = transaction_context(&tx_handle).await;
     if ret_val.is_ok() {
         let commit_result = tx_handle.commit().await;
@@ -111,17 +138,14 @@ mod with_transaction_test {
 #[cfg(test)]
 pub mod test_util {
     use crate::external_connections::{
-        ExternalConnectivity, Transactable, TransactionHandle,
+        ConnectionHandle, ExternalConnectivity, Transactable, TransactionHandle,
     };
     use async_trait::async_trait;
-    
-    use sqlx::{
-        PgConnection,
-    };
+
+    use sqlx::PgConnection;
     use std::convert::Infallible;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
-    
 
     pub struct FakeExternalConnectivity {
         is_transacting: bool,
@@ -145,18 +169,25 @@ pub mod test_util {
         }
     }
 
-    struct MockHandle {}
+    pub struct MockHandle {}
 
     // TODO implement ConnectionHandle for MockHandle then return a MockHandle from database_cxn
 
     #[async_trait]
-    impl ExternalConnectivity<'_> for FakeExternalConnectivity {
-        type Handle = ();
-        type Error = ();
+    impl ConnectionHandle for MockHandle {
+        fn borrow_connection(&mut self) -> &mut PgConnection {
+            panic!("You cannot acquire a real database connection in a test.")
+        }
+    }
+
+    #[async_trait]
+    impl<'tx> ExternalConnectivity<'tx> for FakeExternalConnectivity {
+        type Handle = MockHandle;
+        type Error = Infallible;
 
         #[allow(clippy::diverging_sub_expression)]
-        async fn database_cxn(&mut self) -> Result<(), ()> {
-            panic!("You cannot actually connect to the database during a test.");
+        async fn database_cxn(&'tx mut self) -> Result<Self::Handle, Self::Error> {
+            return Ok(MockHandle {});
         }
     }
 
@@ -176,14 +207,16 @@ pub mod test_util {
     }
 
     #[async_trait]
-    impl Transactable<FakeExternalConnectivity> for FakeExternalConnectivity {
-        async fn start_transaction(&self) -> FakeExternalConnectivity {
-            FakeExternalConnectivity {
+    impl<'tx> Transactable<'tx, FakeExternalConnectivity> for FakeExternalConnectivity {
+        type Error = Infallible;
+
+        async fn start_transaction(&'tx self) -> Result<FakeExternalConnectivity, Self::Error> {
+            Ok(FakeExternalConnectivity {
                 is_transacting: true,
                 downstream_transaction_committed: Arc::clone(
                     &self.downstream_transaction_committed,
                 ),
-            }
+            })
         }
     }
 }

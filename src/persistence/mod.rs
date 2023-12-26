@@ -20,7 +20,7 @@ impl ConnectionHandle for PoolConnectionHandle {
 }
 
 #[async_trait]
-impl <'tx> external_connections::ExternalConnectivity<'tx> for ExternalConnectivity {
+impl<'tx> external_connections::ExternalConnectivity<'tx> for ExternalConnectivity {
     type Handle = PoolConnectionHandle;
     type Error = anyhow::Error;
 
@@ -33,6 +33,23 @@ impl <'tx> external_connections::ExternalConnectivity<'tx> for ExternalConnectiv
     }
 }
 
+#[async_trait]
+impl<'tx> external_connections::Transactable<'tx, ExternalConnectionsInTransaction<'tx>>
+    for ExternalConnectivity
+{
+    type Error = anyhow::Error;
+
+    async fn start_transaction(&'tx self) -> Result<ExternalConnectionsInTransaction, Self::Error> {
+        let transaction = self
+            .db
+            .begin()
+            .await
+            .context("Starting transaction from db pool")?;
+
+        return Ok(ExternalConnectionsInTransaction { txn: transaction });
+    }
+}
+
 struct ExternalConnectionsInTransaction<'tx> {
     txn: Transaction<'tx, Postgres>,
 }
@@ -42,7 +59,9 @@ struct TransactionHandle<'tx> {
 }
 
 #[async_trait]
-impl<'tx> external_connections::ExternalConnectivity<'tx> for ExternalConnectionsInTransaction<'tx> {
+impl<'tx> external_connections::ExternalConnectivity<'tx>
+    for ExternalConnectionsInTransaction<'tx>
+{
     type Handle = TransactionHandle<'tx>;
     type Error = anyhow::Error;
 
@@ -55,12 +74,26 @@ impl<'tx> external_connections::ExternalConnectivity<'tx> for ExternalConnection
 
         return Ok(TransactionHandle {
             active_transaction: handle,
-        })
+        });
     }
 }
 
-impl <'tx> ConnectionHandle for TransactionHandle<'tx> {
+impl<'tx> ConnectionHandle for TransactionHandle<'tx> {
     fn borrow_connection(&mut self) -> &mut PgConnection {
         &mut *self.active_transaction
+    }
+}
+
+#[async_trait]
+impl<'tx> external_connections::TransactionHandle for ExternalConnectionsInTransaction<'tx> {
+    type Error = anyhow::Error;
+
+    async fn commit(self) -> Result<(), Self::Error> {
+        self.txn
+            .commit()
+            .await
+            .context("Committing database transaction")?;
+
+        Ok(())
     }
 }
