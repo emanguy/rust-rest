@@ -188,7 +188,7 @@ pub mod test_util {
 
         #[allow(clippy::diverging_sub_expression)]
         async fn database_cxn<'cxn>(&'cxn mut self) -> Result<Self::Handle<'cxn>, Self::Error> {
-            return Ok(MockHandle {});
+            Ok(MockHandle {})
         }
     }
 

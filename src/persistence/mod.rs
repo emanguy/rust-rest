@@ -49,7 +49,7 @@ impl<'tx> external_connections::Transactable<ExternalConnectionsInTransaction<'t
             .await
             .context("Starting transaction from db pool")?;
 
-        return Ok(ExternalConnectionsInTransaction { txn: transaction });
+        Ok(ExternalConnectionsInTransaction { txn: transaction })
     }
 }
 
@@ -75,9 +75,9 @@ impl<'tx> external_connections::ExternalConnectivity
             .await
             .context("acquiring connection from database transaction")?;
 
-        return Ok(TransactionHandle {
+        Ok(TransactionHandle {
             active_transaction: handle,
-        });
+        })
     }
 }
 
