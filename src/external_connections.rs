@@ -187,7 +187,7 @@ pub mod test_util {
         type Error = Infallible;
 
         #[allow(clippy::diverging_sub_expression)]
-        async fn database_cxn<'cxn>(&'cxn mut self) -> Result<Self::Handle<'cxn>, Self::Error> {
+        async fn database_cxn(& mut self) -> Result<Self::Handle<'_>, Self::Error> {
             Ok(MockHandle {})
         }
     }
