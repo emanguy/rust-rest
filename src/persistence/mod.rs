@@ -1,8 +1,9 @@
 mod db_user_driven_ports;
 
+use std::fmt::{Debug, Display};
 use crate::external_connections;
 use crate::external_connections::ConnectionHandle;
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 
 use sqlx::pool::PoolConnection;
 use sqlx::{Acquire, PgConnection, PgPool, Postgres, Transaction};
@@ -109,4 +110,12 @@ impl Count {
     fn count(&self) -> i64 {
         self.count.expect("count() should always produce at least one row")
     }
+}
+
+struct NewId {
+    id: i32,
+}
+
+fn anyhowify<T: Debug + Display>(errorish: T) -> anyhow::Error {
+    anyhow!(format!("{}", errorish))
 }

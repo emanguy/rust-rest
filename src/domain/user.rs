@@ -4,7 +4,8 @@ use crate::external_connections::ExternalConnectivity;
 use anyhow::Context;
 
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Default)]
+#[cfg_attr(test, derive(Clone))]
 pub struct TodoUser {
     pub id: i32,
     pub first_name: String,
@@ -58,12 +59,14 @@ pub mod driven_ports {
     }
 }
 
+#[cfg_attr(test, derive(Clone))]
 pub struct CreateUser {
     pub first_name: String,
     pub last_name: String,
 }
 
 pub mod driving_ports {
+    use mockall::automock;
     use super::*;
     use crate::external_connections::ExternalConnectivity;
     
@@ -76,6 +79,20 @@ pub mod driving_ports {
         PortError(#[from] anyhow::Error),
     }
 
+    #[cfg(test)]
+    mod cue_clone {
+        use anyhow::anyhow;
+        use crate::domain::user::driving_ports::CreateUserError;
+
+        impl Clone for CreateUserError {
+            fn clone(&self) -> Self {
+                match self {
+                    CreateUserError::UserAlreadyExists => CreateUserError::UserAlreadyExists,
+                    CreateUserError::PortError(anyhow_err) => CreateUserError::PortError(anyhow!(format!("{}", anyhow_err)))
+                }
+            }
+        }
+    }
 
     pub trait UserPort {
         async fn get_users(
@@ -349,11 +366,12 @@ mod user_service_tests {
 #[cfg(test)]
 pub(super) mod test_util {
     use super::*;
-    use crate::domain::test_util::Connectivity;
-    use crate::domain::user::driven_ports::{DetectUser, UserDescription};
+    use crate::domain::test_util::{Connectivity, FakeImplementation};
+    use crate::domain::user::driven_ports::{DetectUser, UserDescription, UserReader, UserWriter};
     use anyhow::Error;
 
     use std::sync::RwLock;
+    use crate::domain::user::driving_ports::UserPort;
 
     pub struct InMemoryUserPersistence {
         highest_user_id: i32,
@@ -498,6 +516,24 @@ pub(super) mod test_util {
             Ok(detector.created_users.iter().any(|user| {
                 user.first_name == description.first_name && user.last_name == description.last_name
             }))
+        }
+    }
+
+    struct MockUserService{
+        get_users_response: FakeImplementation<(), Result<Vec<TodoUser>, Error>>,
+        create_user_response: FakeImplementation<CreateUser, Result<i32, CreateUserError>>,
+    }
+
+    impl UserPort for RwLock<MockUserService> {
+        async fn get_users(&self, _: &mut impl ExternalConnectivity, _: &impl UserReader) -> Result<Vec<TodoUser>, Error> {
+            let locked_self = self.read().expect("Lock is poisoned!");
+            locked_self.get_users_response.return_value_anyhow()
+        }
+
+        async fn create_user(&self, new_user: &CreateUser, _: &mut impl ExternalConnectivity, _: &impl UserWriter, _: &impl DetectUser) -> Result<i32, CreateUserError> {
+            let mut locked_self = self.write().expect("Lock is poisoned!");
+            locked_self.create_user_response.save_arguments(new_user.clone());
+            locked_self.create_user_response.return_value_result()
         }
     }
 }
