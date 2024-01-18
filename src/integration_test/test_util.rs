@@ -56,7 +56,7 @@ async fn create_test_db(
         .await
         .expect("Test failure - could not create initial connection to provision database.");
     let mut rng = thread_rng();
-    let schema_id: u32 = rng.gen_range(10_000..99_999);
+    let schema_id: i32 = rng.gen_range(10_000..99_999);
     let template_db_name = format!("test_db_{}", schema_id);
 
     if !*is_db_templatized {

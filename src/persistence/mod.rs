@@ -1,3 +1,5 @@
+mod db_user_driven_ports;
+
 use crate::external_connections;
 use crate::external_connections::ConnectionHandle;
 use anyhow::Context;
@@ -19,12 +21,12 @@ impl ConnectionHandle for PoolConnectionHandle {
     }
 }
 
-#[async_trait]
-impl<'tx> external_connections::ExternalConnectivity<'tx> for ExternalConnectivity {
-    type Handle = PoolConnectionHandle;
+
+impl external_connections::ExternalConnectivity for ExternalConnectivity {
+    type Handle<'cxn_borrow> = PoolConnectionHandle;
     type Error = anyhow::Error;
 
-    async fn database_cxn(&'tx mut self) -> Result<Self::Handle, Self::Error> {
+    async fn database_cxn(&mut self) -> Result<Self::Handle<'_>, Self::Error> {
         let handle = PoolConnectionHandle {
             active_connection: self.db.acquire().await?,
         };
@@ -33,13 +35,14 @@ impl<'tx> external_connections::ExternalConnectivity<'tx> for ExternalConnectivi
     }
 }
 
-#[async_trait]
-impl<'tx> external_connections::Transactable<'tx, ExternalConnectionsInTransaction<'tx>>
+
+impl<'tx> external_connections::Transactable<ExternalConnectionsInTransaction<'tx>>
     for ExternalConnectivity
 {
     type Error = anyhow::Error;
 
-    async fn start_transaction(&'tx self) -> Result<ExternalConnectionsInTransaction, Self::Error> {
+    async fn start_transaction<'this>(&'this self) -> Result<ExternalConnectionsInTransaction<'tx>, Self::Error>
+        where ExternalConnectionsInTransaction<'tx>: 'this {
         let transaction = self
             .db
             .begin()
@@ -58,14 +61,14 @@ struct TransactionHandle<'tx> {
     active_transaction: &'tx mut PgConnection,
 }
 
-#[async_trait]
-impl<'tx> external_connections::ExternalConnectivity<'tx>
+
+impl<'tx> external_connections::ExternalConnectivity
     for ExternalConnectionsInTransaction<'tx>
 {
-    type Handle = TransactionHandle<'tx>;
+    type Handle<'tx_borrow> = TransactionHandle<'tx_borrow> where Self: 'tx_borrow;
     type Error = anyhow::Error;
 
-    async fn database_cxn(&'tx mut self) -> Result<TransactionHandle<'tx>, Self::Error> {
+    async fn database_cxn(&mut self) -> Result<TransactionHandle<'_>, Self::Error> {
         let handle = self
             .txn
             .acquire()
@@ -84,7 +87,7 @@ impl<'tx> ConnectionHandle for TransactionHandle<'tx> {
     }
 }
 
-#[async_trait]
+
 impl<'tx> external_connections::TransactionHandle for ExternalConnectionsInTransaction<'tx> {
     type Error = anyhow::Error;
 
@@ -95,5 +98,15 @@ impl<'tx> external_connections::TransactionHandle for ExternalConnectionsInTrans
             .context("Committing database transaction")?;
 
         Ok(())
+    }
+}
+
+struct Count {
+    count: Option<i64>,
+}
+
+impl Count {
+    fn count(&self) -> i64 {
+        self.count.expect("count() should always produce at least one row")
     }
 }

@@ -5,8 +5,8 @@ use validator::Validate;
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct TodoTask {
-    id: u32,
-    owner_user_id: u32,
+    id: i32,
+    owner_user_id: i32,
     item_desc: String,
 }
 
@@ -16,29 +16,29 @@ pub struct NewTask {
     description: String,
 }
 
-#[async_trait]
+
 pub trait UserTaskReader {
-    async fn tasks_for_user(&self, user_id: u32) -> Result<Vec<TodoTask>, DrivenPortError>;
+    async fn tasks_for_user(&self, user_id: i32) -> Result<Vec<TodoTask>, DrivenPortError>;
     async fn user_task_by_id(
         &self,
-        user_id: u32,
-        task_id: u32,
+        user_id: i32,
+        task_id: i32,
     ) -> Result<Option<TodoTask>, DrivenPortError>;
 }
 
-#[async_trait]
+
 pub trait UserTaskWriter {
     async fn create_task_for_user(
         &self,
-        user_id: u32,
+        user_id: i32,
         task: &NewTask,
-    ) -> Result<u32, DrivenPortError>;
+    ) -> Result<i32, DrivenPortError>;
 }
 
 pub async fn tasks_for_user<UDetect, TReader>(
     user_detect: &UDetect,
     task_reader: &TReader,
-    user_id: u32,
+    user_id: i32,
 ) -> Result<Vec<TodoTask>, Error>
 where
     UDetect: DetectUser,
@@ -55,8 +55,8 @@ where
 pub async fn task_for_user<UDetect, TReader>(
     user_detect: &UDetect,
     task_reader: &TReader,
-    user_id: u32,
-    task_id: u32,
+    user_id: i32,
+    task_id: i32,
 ) -> Result<Option<TodoTask>, Error>
 where
     UDetect: DetectUser,
@@ -73,9 +73,9 @@ where
 pub async fn create_task<UDetect, UTWriter>(
     user_detect: &UDetect,
     task_writer: &UTWriter,
-    user_id: u32,
+    user_id: i32,
     new_task: &NewTask,
-) -> Result<u32, Error>
+) -> Result<i32, Error>
 where
     UDetect: DetectUser,
     UTWriter: UserTaskWriter,
@@ -124,7 +124,7 @@ pub(super) mod test_util {
     pub struct InMemoryUserTaskWriter {
         pub tasks: Vec<TodoTask>,
         pub connected: Connectivity,
-        highest_task_id: u32,
+        highest_task_id: i32,
     }
 
     impl InMemoryUserTaskWriter {
@@ -137,13 +137,13 @@ pub(super) mod test_util {
         }
     }
 
-    #[async_trait]
+
     impl UserTaskWriter for RwLock<InMemoryUserTaskWriter> {
         async fn create_task_for_user(
             &self,
-            user_id: u32,
+            user_id: i32,
             task: &NewTask,
-        ) -> Result<u32, DrivenPortError> {
+        ) -> Result<i32, DrivenPortError> {
             let mut persistence = self.write().expect("task persist rw lock poisoned");
             persistence.connected.blow_up_if_disconnected()?;
 
@@ -156,7 +156,7 @@ pub(super) mod test_util {
         }
     }
 
-    pub fn task_from_create(user_id: u32, task_id: u32, new_task: &NewTask) -> TodoTask {
+    pub fn task_from_create(user_id: i32, task_id: i32, new_task: &NewTask) -> TodoTask {
         TodoTask {
             id: task_id,
             owner_user_id: user_id,

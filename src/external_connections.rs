@@ -5,26 +5,27 @@ use std::fmt::{Debug, Display};
 use std::future::Future;
 use thiserror::Error;
 
-#[async_trait]
-pub trait ExternalConnectivity<'tx>: Sync {
-    type Handle: ConnectionHandle;
+
+pub trait ExternalConnectivity: Sync {
+    type Handle<'handle>: ConnectionHandle + 'handle where Self: 'handle;
     type Error: Debug + Display;
 
-    async fn database_cxn(&'tx mut self) -> Result<Self::Handle, Self::Error>;
+    async fn database_cxn(&mut self) -> Result<Self::Handle<'_>, Self::Error>;
 }
 
 pub trait ConnectionHandle {
     fn borrow_connection(&mut self) -> &mut PgConnection;
 }
 
-#[async_trait]
-pub trait Transactable<'tx, Handle: TransactionHandle>: Sync {
+
+pub trait Transactable<Handle: TransactionHandle>: Sync {
     type Error: Debug + Display;
 
-    async fn start_transaction(&'tx self) -> Result<Handle, Self::Error>;
+    async fn start_transaction<'this>(&'this self) -> Result<Handle, Self::Error>
+        where Handle: 'this;
 }
 
-#[async_trait]
+
 pub trait TransactionHandle: Sync {
     type Error: Debug + Display;
 
@@ -61,12 +62,12 @@ where
 /// invokes [transaction_context] with the started transaction. When [transaction_context] completes,
 /// the transaction handle passed to it is committed as long as [transaction_context] does not return
 /// a [Result::Err].
-pub async fn with_transaction<'tx, TxAble, ErrBegin, Handle, ErrCommit, Fn, Fut, Ret, ErrSource>(
-    tx_origin: &'tx TxAble,
+pub async fn with_transaction<TxAble, ErrBegin, Handle, ErrCommit, Fn, Fut, Ret, ErrSource>(
+    tx_origin: &TxAble,
     transaction_context: Fn,
 ) -> Result<Ret, TxOrSourceError<Ret, ErrSource, TxAble::Error, Handle::Error>>
 where
-    TxAble: Transactable<'tx, Handle, Error = ErrBegin>,
+    TxAble: Transactable<Handle, Error = ErrBegin>,
     ErrBegin: Debug + Display,
     Handle: TransactionHandle<Error = ErrCommit>,
     ErrCommit: Debug + Display,
@@ -173,25 +174,25 @@ pub mod test_util {
 
     // TODO implement ConnectionHandle for MockHandle then return a MockHandle from database_cxn
 
-    #[async_trait]
+
     impl ConnectionHandle for MockHandle {
         fn borrow_connection(&mut self) -> &mut PgConnection {
             panic!("You cannot acquire a real database connection in a test.")
         }
     }
 
-    #[async_trait]
-    impl<'tx> ExternalConnectivity<'tx> for FakeExternalConnectivity {
-        type Handle = MockHandle;
+
+    impl ExternalConnectivity for FakeExternalConnectivity {
+        type Handle<'cxn> = MockHandle;
         type Error = Infallible;
 
         #[allow(clippy::diverging_sub_expression)]
-        async fn database_cxn(&'tx mut self) -> Result<Self::Handle, Self::Error> {
+        async fn database_cxn<'cxn>(&'cxn mut self) -> Result<Self::Handle<'cxn>, Self::Error> {
             return Ok(MockHandle {});
         }
     }
 
-    #[async_trait]
+
     impl TransactionHandle for FakeExternalConnectivity {
         type Error = Infallible;
 
@@ -206,11 +207,12 @@ pub mod test_util {
         }
     }
 
-    #[async_trait]
-    impl<'tx> Transactable<'tx, FakeExternalConnectivity> for FakeExternalConnectivity {
+
+    impl Transactable<FakeExternalConnectivity> for FakeExternalConnectivity {
         type Error = Infallible;
 
-        async fn start_transaction(&'tx self) -> Result<FakeExternalConnectivity, Self::Error> {
+        async fn start_transaction<'this>(&'this self) -> Result<FakeExternalConnectivity, Self::Error>
+            where FakeExternalConnectivity: 'this {
             Ok(FakeExternalConnectivity {
                 is_transacting: true,
                 downstream_transaction_committed: Arc::clone(
