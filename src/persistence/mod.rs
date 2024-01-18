@@ -3,9 +3,9 @@ mod db_user_driven_ports;
 use crate::external_connections;
 use crate::external_connections::ConnectionHandle;
 use anyhow::Context;
-use async_trait::async_trait;
+
 use sqlx::pool::PoolConnection;
-use sqlx::{Acquire, Database, PgConnection, PgPool, Postgres, Transaction};
+use sqlx::{Acquire, PgConnection, PgPool, Postgres, Transaction};
 
 pub struct ExternalConnectivity {
     db: PgPool,

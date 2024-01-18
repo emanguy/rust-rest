@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Error};
-use sqlx::{query, query_as};
+use sqlx::{query_as};
 use crate::domain;
 use crate::domain::user::driven_ports::UserDescription;
 use crate::external_connections::{ConnectionHandle, ExternalConnectivity};

@@ -1,6 +1,6 @@
-use async_trait::async_trait;
+
 use sqlx::PgConnection;
-use std::error::Error;
+
 use std::fmt::{Debug, Display};
 use std::future::Future;
 use thiserror::Error;
@@ -141,7 +141,7 @@ pub mod test_util {
     use crate::external_connections::{
         ConnectionHandle, ExternalConnectivity, Transactable, TransactionHandle,
     };
-    use async_trait::async_trait;
+    
 
     use sqlx::PgConnection;
     use std::convert::Infallible;
