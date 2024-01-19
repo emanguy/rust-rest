@@ -43,7 +43,10 @@ jobs:
               echo "Waiting for database..."
               sleep 5
             done
-            psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL     
+            pwd
+            ls
+            psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL  
+            echo "Migrations complete!"
       - rust_build
       - run: 
           name: "Run tests"
