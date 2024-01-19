@@ -31,6 +31,9 @@ jobs:
         environment:
           POSTGRES_PASSWORD: sample123
     environment:
+      # This is needed for sqlx to verify queries
+      DATABASE_URL: "postgresql://postgres:sample123@test-db:5432"
+      # This is needed for the integration tests to actually connect to the database
       TEST_DB_URL: "postgresql://postgres:sample123@test-db:5432"
       DB_TABLE_URL: "postgresql://postgres:sample123@test-db:5432/postgres"
     steps:
