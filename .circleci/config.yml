@@ -38,7 +38,11 @@ jobs:
       - run:
           name: Provision database
           command: |
-            psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL  
+            until psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL  
+            do
+              echo "Trying again in a few seconds..."
+              sleep 5
+            done
             echo "Migrations complete!"
       - rust_build
       - run: 
