@@ -126,7 +126,7 @@ pub async fn prepare_application(routes: Router<Arc<SharedData>>) -> (Router, sq
     });
 
     let db = prepare_db(pg_connection_base_url.as_str()).await;
-    let app = routes.with_state(Arc::new(SharedData { db: db.clone() }));
+    let app = routes.with_state(Arc::new(SharedData { ext_cxn: db.clone() }));
 
     (app, db)
 }

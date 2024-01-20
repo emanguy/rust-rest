@@ -6,7 +6,7 @@ use crate::external_connections::{ConnectionHandle, ExternalConnectivity};
 use super::Count;
 use crate::domain::user::{CreateUser, TodoUser};
 
-struct DbDetectUser{}
+pub struct DbDetectUser{}
 
 impl domain::user::driven_ports::DetectUser for DbDetectUser {
     async fn user_exists(&self, user_id: i32, ext_cxn: &mut impl ExternalConnectivity) -> Result<bool, anyhow::Error> {
@@ -36,7 +36,7 @@ impl domain::user::driven_ports::DetectUser for DbDetectUser {
     }
 }
 
-struct DbReadUsers{}
+pub struct DbReadUsers{}
 
 struct TodoUserRow {
     id: i32,
@@ -80,7 +80,7 @@ impl domain::user::driven_ports::UserReader for DbReadUsers {
     }
 }
 
-struct DbWriteUsers{}
+pub struct DbWriteUsers{}
 
 impl domain::user::driven_ports::UserWriter for DbWriteUsers {
     async fn create_user(&self, user: &CreateUser, ext_cxn: &mut impl ExternalConnectivity) -> Result<i32, Error> {

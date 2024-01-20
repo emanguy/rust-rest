@@ -1,4 +1,4 @@
-mod db_user_driven_ports;
+pub mod db_user_driven_ports;
 
 use std::fmt::{Debug, Display};
 use crate::external_connections;
@@ -8,8 +8,17 @@ use anyhow::{anyhow, Context};
 use sqlx::pool::PoolConnection;
 use sqlx::{Acquire, PgConnection, PgPool, Postgres, Transaction};
 
+#[derive(Clone)]
 pub struct ExternalConnectivity {
     db: PgPool,
+}
+
+impl ExternalConnectivity {
+    pub fn new(db: PgPool) -> Self {
+        ExternalConnectivity {
+            db
+        }
+    }
 }
 
 pub struct PoolConnectionHandle {
@@ -37,13 +46,12 @@ impl external_connections::ExternalConnectivity for ExternalConnectivity {
 }
 
 
-impl<'tx> external_connections::Transactable<ExternalConnectionsInTransaction<'tx>>
-    for ExternalConnectivity
+impl external_connections::Transactable for ExternalConnectivity
 {
+    type Handle<'handle> = ExternalConnectionsInTransaction<'handle>;
     type Error = anyhow::Error;
 
-    async fn start_transaction<'this>(&'this self) -> Result<ExternalConnectionsInTransaction<'tx>, Self::Error>
-        where ExternalConnectionsInTransaction<'tx>: 'this {
+    async fn start_transaction(&self) -> Result<Self::Handle<'_>, Self::Error> {
         let transaction = self
             .db
             .begin()
@@ -54,11 +62,11 @@ impl<'tx> external_connections::Transactable<ExternalConnectionsInTransaction<'t
     }
 }
 
-struct ExternalConnectionsInTransaction<'tx> {
+pub struct ExternalConnectionsInTransaction<'tx> {
     txn: Transaction<'tx, Postgres>,
 }
 
-struct TransactionHandle<'tx> {
+pub struct TransactionHandle<'tx> {
     active_transaction: &'tx mut PgConnection,
 }
 

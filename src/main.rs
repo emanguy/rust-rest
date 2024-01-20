@@ -33,7 +33,7 @@ pub fn configure_logger() {
 }
 
 pub struct SharedData {
-    pub db: PgPool,
+    pub ext_cxn: persistence::ExternalConnectivity,
 }
 
 type AppState = State<Arc<SharedData>>;
@@ -47,13 +47,14 @@ async fn main() {
     let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
     let sqlx_db_connection = db::connect_sqlx(&db_url).await;
+    let ext_cxn = persistence::ExternalConnectivity::new(sqlx_db_connection);
 
     let router = Router::new()
         .route("/hello", get(routes::hello))
         .nest("/users", routes::user_routes())
         .nest("/tasks", routes::task_routes())
         .with_state(Arc::new(SharedData {
-            db: sqlx_db_connection,
+            ext_cxn,
         }));
 
     info!("Starting server.");

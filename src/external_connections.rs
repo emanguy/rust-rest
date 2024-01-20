@@ -5,6 +5,9 @@ use std::fmt::{Debug, Display};
 use std::future::Future;
 use thiserror::Error;
 
+pub trait TransactableExternalConnectivity: ExternalConnectivity + Transactable + Sync {}
+
+impl <T: ExternalConnectivity + Transactable + Sync> TransactableExternalConnectivity for T {}
 
 pub trait ExternalConnectivity: Sync {
     type Handle<'handle>: ConnectionHandle + 'handle where Self: 'handle;
@@ -18,11 +21,11 @@ pub trait ConnectionHandle {
 }
 
 
-pub trait Transactable<Handle: TransactionHandle>: Sync {
+pub trait Transactable: Sync {
+    type Handle<'handle>: TransactionHandle + 'handle where Self: 'handle;
     type Error: Debug + Display;
 
-    async fn start_transaction<'this>(&'this self) -> Result<Handle, Self::Error>
-        where Handle: 'this;
+    async fn start_transaction(&self) -> Result<Self::Handle<'_>, Self::Error>;
 }
 
 
@@ -62,12 +65,12 @@ where
 /// invokes [transaction_context] with the started transaction. When [transaction_context] completes,
 /// the transaction handle passed to it is committed as long as [transaction_context] does not return
 /// a [Result::Err].
-pub async fn with_transaction<TxAble, ErrBegin, Handle, ErrCommit, Fn, Fut, Ret, ErrSource>(
-    tx_origin: &TxAble,
+pub async fn with_transaction<'tx, TxAble, ErrBegin, Handle, ErrCommit, Fn, Fut, Ret, ErrSource>(
+    tx_origin: &'tx TxAble,
     transaction_context: Fn,
 ) -> Result<Ret, TxOrSourceError<Ret, ErrSource, TxAble::Error, Handle::Error>>
 where
-    TxAble: Transactable<Handle, Error = ErrBegin>,
+    TxAble: Transactable<Handle<'tx> = Handle, Error = ErrBegin>,
     ErrBegin: Debug + Display,
     Handle: TransactionHandle<Error = ErrCommit>,
     ErrCommit: Debug + Display,
@@ -208,11 +211,11 @@ pub mod test_util {
     }
 
 
-    impl Transactable<FakeExternalConnectivity> for FakeExternalConnectivity {
+    impl Transactable for FakeExternalConnectivity {
+        type Handle<'handle> = FakeExternalConnectivity;
         type Error = Infallible;
 
-        async fn start_transaction<'this>(&'this self) -> Result<FakeExternalConnectivity, Self::Error>
-            where FakeExternalConnectivity: 'this {
+        async fn start_transaction(&self) -> Result<FakeExternalConnectivity, Self::Error> {
             Ok(FakeExternalConnectivity {
                 is_transacting: true,
                 downstream_transaction_committed: Arc::clone(

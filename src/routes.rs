@@ -33,7 +33,7 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
 /// Retrieves a list of all the users in the system.
 async fn get_users(State(app_data): AppState) -> Result<Json<Vec<TodoUser>>, ErrorResponse> {
     info!("Requested users");
-    let db_cxn = &app_data.db;
+    let db_cxn = &app_data.ext_cxn;
     let users_result = db::get_users(db_cxn).await;
     if users_result.is_err() {
         error!(
@@ -55,7 +55,7 @@ async fn create_user(
         .validate()
         .map_err(ValidationErrorResponse::from)?;
 
-    let db_cxn = &app_data.db;
+    let db_cxn = &app_data.ext_cxn;
     let creation_result = db::create_user(db_cxn, &user_to_create).await;
     if creation_result.is_err() {
         error!(
@@ -86,7 +86,7 @@ async fn get_tasks_for_user(
     Path(user_id): Path<i32>,
 ) -> Result<Json<Vec<TodoTask>>, ErrorResponse> {
     info!("Get tasks for user {user_id}");
-    let db_cxn = &app_state.db;
+    let db_cxn = &app_state.ext_cxn;
     let tasks = db::get_tasks_for_user(db_cxn, user_id).await;
     if tasks.is_err() {
         let err = tasks.as_ref().unwrap_err();
@@ -107,7 +107,7 @@ async fn get_task_for_user(
     Path(path): Path<GetTaskPath>,
 ) -> Result<Json<TodoTask>, ErrorResponse> {
     info!("Get task {} for user {}", path.task_id, path.user_id);
-    let db_cxn = &app_state.db;
+    let db_cxn = &app_state.ext_cxn;
     let task = db::get_task_for_user(db_cxn, path.user_id, path.task_id).await;
     if let Err(ref contained_err) = task {
         // We don't want to log an error for the "no results" case
@@ -139,7 +139,7 @@ async fn add_task_for_user(
         .validate()
         .map_err(ValidationErrorResponse::from)?;
 
-    let db_cxn = &app_state.db;
+    let db_cxn = &app_state.ext_cxn;
     let inserted_task = db::add_task_for_user(db_cxn, user_id, &task_data).await;
     if inserted_task.is_err() {
         error!(
@@ -169,7 +169,7 @@ async fn update_task(
         .validate()
         .map_err(ValidationErrorResponse::from)?;
 
-    let db_cxn = &app_state.db;
+    let db_cxn = &app_state.ext_cxn;
     let update_result = db::update_user_task(db_cxn, task_id, &task_data).await;
     match update_result {
         Ok(_) => Ok(StatusCode::OK),
@@ -186,7 +186,7 @@ async fn delete_task(
     Path(task_id): Path<i32>,
 ) -> Result<StatusCode, ErrorResponse> {
     info!("Deleting task {task_id}");
-    let db_cxn = &app_state.db;
+    let db_cxn = &app_state.ext_cxn;
     let delete_result = db::delete_user_task(db_cxn, task_id).await;
     match delete_result {
         Ok(_) => Ok(StatusCode::OK),
