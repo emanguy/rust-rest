@@ -1,7 +1,8 @@
-use crate::domain::user::{verify_user_exists, DetectUser};
-use crate::domain::{DrivenPortError, Error};
-use async_trait::async_trait;
-use validator::Validate;
+use crate::domain;
+use crate::domain::todo::driven_ports::{TaskReader, TaskWriter};
+use crate::domain::todo::driving_ports::TaskError;
+use crate::external_connections::ExternalConnectivity;
+use log::error;
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct TodoTask {
@@ -10,97 +11,151 @@ pub struct TodoTask {
     item_desc: String,
 }
 
-#[derive(Validate)]
 pub struct NewTask {
-    #[validate(length(min = 1))]
     description: String,
 }
 
+pub mod driven_ports {
+    use super::*;
+    use crate::external_connections::ExternalConnectivity;
 
-pub trait UserTaskReader {
-    async fn tasks_for_user(&self, user_id: i32) -> Result<Vec<TodoTask>, DrivenPortError>;
+    pub trait TaskReader {
+        async fn tasks_for_user(
+            &self,
+            user_id: i32,
+            ext_cxn: &mut impl ExternalConnectivity,
+        ) -> Result<Vec<TodoTask>, anyhow::Error>;
+        async fn user_task_by_id(
+            &self,
+            user_id: i32,
+            task_id: i32,
+            ext_cxn: &mut impl ExternalConnectivity,
+        ) -> Result<Option<TodoTask>, anyhow::Error>;
+    }
+
+    pub trait TaskWriter {
+        async fn create_task_for_user(
+            &self,
+            user_id: i32,
+            new_task: &NewTask,
+            ext_cxn: &mut impl ExternalConnectivity,
+        ) -> Result<i32, anyhow::Error>;
+    }
+}
+
+pub mod driving_ports {
+    use super::*;
+    use crate::domain;
+    use crate::external_connections::ExternalConnectivity;
+    use thiserror::Error;
+
+    #[derive(Debug, Error)]
+    pub enum TaskError {
+        #[error("The specified user did not exist.")]
+        UserDoesNotExist,
+        #[error(transparent)]
+        PortError(#[from] anyhow::Error),
+    }
+
+    impl From<domain::user::UserExistsErr> for TaskError {
+        fn from(value: domain::user::UserExistsErr) -> Self {
+            match value {
+                domain::user::UserExistsErr::UserDoesNotExist(user_id) => {
+                    error!("User {} didn't exist when fetching tasks.", user_id);
+                    return TaskError::UserDoesNotExist;
+                }
+                domain::user::UserExistsErr::PortError(err) => {
+                    return TaskError::from(err.context("Fetching user tasks"))
+                }
+            }
+        }
+    }
+
+    pub trait TaskPort {
+        async fn tasks_for_user(
+            &self,
+            user_id: i32,
+            ext_cxn: &mut impl ExternalConnectivity,
+            u_detect: &impl domain::user::driven_ports::DetectUser,
+            task_read: &impl driven_ports::TaskReader,
+        ) -> Result<Vec<TodoTask>, TaskError>;
+        async fn user_task_by_id(
+            &self,
+            user_id: i32,
+            task_id: i32,
+            ext_cxn: &mut impl ExternalConnectivity,
+            u_detect: &impl domain::user::driven_ports::DetectUser,
+            task_read: &impl driven_ports::TaskReader,
+        ) -> Result<Option<TodoTask>, TaskError>;
+        async fn create_task_for_user(
+            &self,
+            user_id: i32,
+            task: &NewTask,
+            ext_cxn: &mut impl ExternalConnectivity,
+            u_detect: &impl domain::user::driven_ports::DetectUser,
+            task_read: &impl driven_ports::TaskWriter,
+        ) -> Result<i32, TaskError>;
+    }
+}
+
+pub struct TaskService {}
+
+impl driving_ports::TaskPort for TaskService {
+    async fn tasks_for_user(
+        &self,
+        user_id: i32,
+        ext_cxn: &mut impl ExternalConnectivity,
+        u_detect: &impl domain::user::driven_ports::DetectUser,
+        task_read: &impl TaskReader,
+    ) -> Result<Vec<TodoTask>, TaskError> {
+        domain::user::verify_user_exists(user_id, &mut *ext_cxn, u_detect).await?;
+        let tasks_result = task_read.tasks_for_user(user_id, &mut *ext_cxn).await?;
+
+        Ok(tasks_result)
+    }
+
     async fn user_task_by_id(
         &self,
         user_id: i32,
         task_id: i32,
-    ) -> Result<Option<TodoTask>, DrivenPortError>;
-}
+        ext_cxn: &mut impl ExternalConnectivity,
+        u_detect: &impl domain::user::driven_ports::DetectUser,
+        task_read: &impl TaskReader,
+    ) -> Result<Option<TodoTask>, TaskError> {
+        domain::user::verify_user_exists(user_id, &mut *ext_cxn, u_detect).await?;
+        let tasks_result = task_read
+            .user_task_by_id(user_id, task_id, &mut *ext_cxn)
+            .await?;
 
+        Ok(tasks_result)
+    }
 
-pub trait UserTaskWriter {
     async fn create_task_for_user(
         &self,
         user_id: i32,
         task: &NewTask,
-    ) -> Result<i32, DrivenPortError>;
-}
-
-pub async fn tasks_for_user<UDetect, TReader>(
-    user_detect: &UDetect,
-    task_reader: &TReader,
-    user_id: i32,
-) -> Result<Vec<TodoTask>, Error>
-where
-    UDetect: DetectUser,
-    TReader: UserTaskReader,
-{
-    verify_user_exists(user_id, user_detect).await?;
-
-    task_reader
-        .tasks_for_user(user_id)
-        .await
-        .map_err(|err| err.into_error_trying_to("look up a user's tasks"))
-}
-
-pub async fn task_for_user<UDetect, TReader>(
-    user_detect: &UDetect,
-    task_reader: &TReader,
-    user_id: i32,
-    task_id: i32,
-) -> Result<Option<TodoTask>, Error>
-where
-    UDetect: DetectUser,
-    TReader: UserTaskReader,
-{
-    verify_user_exists(user_id, user_detect).await?;
-
-    task_reader
-        .user_task_by_id(user_id, task_id)
-        .await
-        .map_err(|err| err.into_error_trying_to("look up a user's task by id"))
-}
-
-pub async fn create_task<UDetect, UTWriter>(
-    user_detect: &UDetect,
-    task_writer: &UTWriter,
-    user_id: i32,
-    new_task: &NewTask,
-) -> Result<i32, Error>
-where
-    UDetect: DetectUser,
-    UTWriter: UserTaskWriter,
-{
-    new_task.validate().map_err(Error::Invalid)?;
-    verify_user_exists(user_id, user_detect).await?;
-
-    task_writer
-        .create_task_for_user(user_id, new_task)
-        .await
-        .map_err(|err| err.into_error_trying_to("create a task for a user"))
+        ext_cxn: &mut impl ExternalConnectivity,
+        u_detect: &impl domain::user::driven_ports::DetectUser,
+        task_write: &impl TaskWriter,
+    ) -> Result<i32, TaskError> {
+        domain::user::verify_user_exists(user_id, &mut *ext_cxn, u_detect)?;
+        let created_task_id = task_write.create_task_for_user(user_id, task, &mut *ext_cxn).await?;
+        Ok(created_task_id)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::test_util::*;
     use super::*;
-    use crate::domain::user::test_util::InMemoryUserDetector;
+    use crate::domain::user::test_util::InMemoryUserPersistence;
     use crate::domain::Error;
     use std::sync::RwLock;
 
     #[tokio::test]
     async fn create_does_not_accept_invalid_tasks() {
         let writer = RwLock::new(InMemoryUserTaskWriter::new());
-        let user_detector = RwLock::new(InMemoryUserDetector::with_users([1]));
+        let user_detector = RwLock::new(InMemoryUserPersistence::with_users([1]));
         let bad_task = NewTask {
             description: String::new(),
         };
@@ -136,7 +191,6 @@ pub(super) mod test_util {
             }
         }
     }
-
 
     impl UserTaskWriter for RwLock<InMemoryUserTaskWriter> {
         async fn create_task_for_user(

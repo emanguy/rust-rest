@@ -12,9 +12,9 @@ use crate::db::DbError;
 /// Contains diagnostic information about an API failure
 #[derive(Serialize, Debug)]
 pub struct BasicErrorResponse {
-    error_code: String,
-    error_description: String,
-    extra_info: Option<ExtraInfo>,
+    pub error_code: String,
+    pub error_description: String,
+    pub extra_info: Option<ExtraInfo>,
 }
 
 #[derive(Serialize, Debug)]
@@ -24,44 +24,18 @@ pub enum ExtraInfo {
     Message(String),
 }
 
-/// Response type that wraps database errors and turns them into [BasicErrorResponse]s
-pub enum DbErrorResponse {
-    NoResults,
-    QueryFailure,
-}
+pub struct GenericErrorResponse(pub anyhow::Error);
 
-impl IntoResponse for DbErrorResponse {
+impl IntoResponse for GenericErrorResponse {
     fn into_response(self) -> Response {
-        match self {
-            Self::NoResults => (
-                StatusCode::NOT_FOUND,
-                Json(BasicErrorResponse {
-                    error_code: "not_found".into(),
-                    error_description: "The requested entity could not be found.".into(),
-                    extra_info: None,
-                }),
-            )
-                .into_response(),
-
-            Self::QueryFailure => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(BasicErrorResponse {
-                    error_code: "internal_error".into(),
-                    error_description: "Could not access data to complete your request".into(),
-                    extra_info: None,
-                }),
-            )
-                .into_response(),
-        }
-    }
-}
-
-impl From<DbError> for DbErrorResponse {
-    fn from(value: DbError) -> Self {
-        match value {
-            DbError::NoResults => Self::NoResults,
-            DbError::QueryFailure(_) => Self::QueryFailure,
-        }
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(BasicErrorResponse {
+                error_code: "internal_error".to_owned(),
+                error_description: format!("An unexpected error occurred: {}", self.0),
+                extra_info: None,
+            })
+        ).into_response()
     }
 }
 

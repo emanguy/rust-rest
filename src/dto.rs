@@ -1,6 +1,25 @@
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
+use crate::domain;
+
+/// DTO for a constructed user
+#[derive(Serialize)]
+pub struct TodoUser {
+    pub id: i32,
+    pub first_name: String,
+    pub last_name: String,
+}
+
+impl From<domain::user::TodoUser> for TodoUser {
+    fn from(value: domain::user::TodoUser) -> Self {
+        TodoUser {
+            id: value.id,
+            first_name: value.first_name,
+            last_name: value.last_name,
+        }
+    }
+}
 
 /// DTO for creating a new user via the API
 #[derive(Deserialize, Serialize, Display, Validate)]

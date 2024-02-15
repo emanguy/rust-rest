@@ -1,10 +1,13 @@
+use crate::domain::user::driving_ports::CreateUserError;
 use crate::entity::{TodoTask, TodoUser};
-use crate::external_connections::TransactableExternalConnectivity;
-use crate::routing_utils::{DbErrorResponse, Json, ValidationErrorResponse};
+use crate::external_connections::{ExternalConnectivity, TransactableExternalConnectivity};
+use crate::routing_utils::{
+    BasicErrorResponse, DbErrorResponse, GenericErrorResponse, Json, ValidationErrorResponse,
+};
 use crate::{db, domain, dto, persistence, AppState, SharedData};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::ErrorResponse;
+use axum::response::{ErrorResponse, IntoResponse};
 use axum::routing::{get, post};
 use axum::Router;
 use log::{error, info};
@@ -25,7 +28,26 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
                 get_users(external_connectivity, user_service, user_reader).await
             }),
         )
-        .route("/", post(create_user))
+        .route(
+            "/",
+            post(
+                |State(app_data): AppState, Json(new_user): Json<dto::NewUser>| async {
+                    let user_service = domain::user::UserService {};
+                    let user_detector = persistence::db_user_driven_ports::DbDetectUser {};
+                    let user_writer = persistence::db_user_driven_ports::DbWriteUsers {};
+                    let mut external_connectivity = app_data.ext_cxn.clone();
+
+                    create_user(
+                        new_user,
+                        external_connectivity,
+                        user_service,
+                        user_detector,
+                        user_writer,
+                    )
+                    .await
+                },
+            ),
+        )
         .route("/:user_id/tasks", get(get_tasks_for_user))
         .route("/:user_id/tasks/:task_id", get(get_task_for_user))
         .route("/:user_id/tasks", post(add_task_for_user))
@@ -36,7 +58,7 @@ async fn get_users(
     mut ext_cxn: impl TransactableExternalConnectivity,
     user_service: impl domain::user::driving_ports::UserPort,
     user_reader: impl domain::user::driven_ports::UserReader,
-) -> Result<Json<Vec<TodoUser>>, ErrorResponse> {
+) -> Result<Json<Vec<dto::TodoUser>>, ErrorResponse> {
     info!("Requested users");
     let users_result = user_service.get_users(&mut ext_cxn, &user_reader).await;
     if users_result.is_err() {
@@ -45,36 +67,58 @@ async fn get_users(
             users_result.as_ref().unwrap_err()
         );
     }
-    let response = users_result.map_err(DbErrorResponse::from)?;
+    let response = users_result
+        .map_err(GenericErrorResponse)?
+        .into_iter()
+        .map(dto::TodoUser::from)
+        .collect::<Vec<_>>();
+
     Ok(Json(response))
 }
 
 /// Creates a user.
 async fn create_user(
-    State(app_data): AppState,
-    Json(user_to_create): Json<dto::NewUser>,
+    new_user: dto::NewUser,
+    mut ext_cxn: impl ExternalConnectivity,
+    user_service: impl domain::user::driving_ports::UserPort,
+    user_detector: impl domain::user::driven_ports::DetectUser,
+    user_writer: impl domain::user::driven_ports::UserWriter,
 ) -> Result<(StatusCode, Json<dto::InsertedUser>), ErrorResponse> {
-    info!("Attempt to create user: {}", user_to_create);
-    user_to_create
-        .validate()
-        .map_err(ValidationErrorResponse::from)?;
+    info!("Attempt to create user: {}", new_user);
+    new_user.validate().map_err(ValidationErrorResponse::from)?;
 
-    let db_cxn = &app_data.ext_cxn;
-    let creation_result = db::create_user(db_cxn, &user_to_create).await;
-    if creation_result.is_err() {
-        error!(
-            "User create failure: {}",
-            creation_result.as_ref().unwrap_err()
-        );
-    }
-    Ok((
-        StatusCode::CREATED,
-        Json(
-            creation_result
-                .map_err(DbErrorResponse::from)
-                .map(|id| dto::InsertedUser { id })?,
-        ),
-    ))
+    let domain_user_create = domain::user::CreateUser {
+        first_name: new_user.first_name,
+        last_name: new_user.last_name,
+    };
+    let creation_result = user_service
+        .create_user(
+            &domain_user_create,
+            &mut ext_cxn,
+            &user_writer,
+            &user_detector,
+        )
+        .await;
+    let user_id =
+        match creation_result {
+            Ok(id) => id,
+            Err(CreateUserError::UserAlreadyExists) => {
+                return Err((
+                    StatusCode::CONFLICT,
+                    Json(BasicErrorResponse {
+                        error_code: "user_exists".to_owned(),
+                        error_description:
+                            "A user already exists in the system with the given information."
+                                .to_owned(),
+                        extra_info: None,
+                    }),
+                )
+                    .into())
+            }
+            Err(CreateUserError::PortError(err)) => return Err(GenericErrorResponse(err).into()),
+        };
+
+    Ok((StatusCode::CREATED, Json(dto::InsertedUser { id: user_id })))
 }
 
 /// Retrieves a set of tasks owned by a user
