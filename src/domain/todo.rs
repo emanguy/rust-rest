@@ -138,7 +138,7 @@ impl driving_ports::TaskPort for TaskService {
         u_detect: &impl domain::user::driven_ports::DetectUser,
         task_write: &impl TaskWriter,
     ) -> Result<i32, TaskError> {
-        domain::user::verify_user_exists(user_id, &mut *ext_cxn, u_detect)?;
+        domain::user::verify_user_exists(user_id, &mut *ext_cxn, u_detect).await?;
         let created_task_id = task_write.create_task_for_user(user_id, task, &mut *ext_cxn).await?;
         Ok(created_task_id)
     }
