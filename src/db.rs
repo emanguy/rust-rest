@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use thiserror::Error;
 
-use crate::{dto, entity};
+use crate::{dto};
 use sqlx::{postgres::PgPoolOptions, PgExecutor, Row};
 
 /// Describes errors that may happen at the database layer

@@ -8,14 +8,14 @@ use dotenv::dotenv;
 use log::*;
 use sqlx::PgPool;
 
-mod api;
+// mod api;
 mod app_env;
-mod db;
+// mod db;
 mod domain;
 mod dto;
-mod entity;
+// mod entity;
 mod persistence;
-mod routes;
+// mod routes;
 mod routing_utils;
 
 mod external_connections;
@@ -46,20 +46,20 @@ async fn main() {
     configure_logger();
     let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
-    let sqlx_db_connection = db::connect_sqlx(&db_url).await;
-    let ext_cxn = persistence::ExternalConnectivity::new(sqlx_db_connection);
-
-    let router = Router::new()
-        .route("/hello", get(routes::hello))
-        .nest("/users", routes::user_routes())
-        .nest("/tasks", routes::task_routes())
-        .with_state(Arc::new(SharedData {
-            ext_cxn,
-        }));
+    // let sqlx_db_connection = db::connect_sqlx(&db_url).await;
+    // let ext_cxn = persistence::ExternalConnectivity::new(sqlx_db_connection);
+    // 
+    // let router = Router::new()
+    //     .route("/hello", get(routes::hello))
+    //     .nest("/users", routes::user_routes())
+    //     .nest("/tasks", routes::task_routes())
+    //     .with_state(Arc::new(SharedData {
+    //         ext_cxn,
+    //     }));
 
     info!("Starting server.");
-    axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
-        .serve(router.into_make_service())
-        .await
-        .unwrap();
+    // axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
+    //     .serve(router.into_make_service())
+    //     .await
+    //     .unwrap();
 }

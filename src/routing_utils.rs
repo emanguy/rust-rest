@@ -7,8 +7,6 @@ use serde::Serialize;
 
 use validator::ValidationErrors;
 
-use crate::db::DbError;
-
 /// Contains diagnostic information about an API failure
 #[derive(Serialize, Debug)]
 pub struct BasicErrorResponse {

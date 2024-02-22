@@ -1,4 +1,4 @@
-use crate::{app_env, configure_logger, db, SharedData};
+use crate::{app_env, configure_logger, SharedData};
 use axum::Router;
 use dotenv::dotenv;
 use lazy_static::lazy_static;
@@ -78,25 +78,26 @@ async fn create_test_db(
 /// when creating a new schema.
 async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
     // I need to create individual connections here because I need exclusive database access in order to convert a schema to a template schema
-    let test_db = {
-        {
-            let mut db_cleaned_state = DB_CLEANED.lock().await;
-            if !*db_cleaned_state {
-                clear_old_dbs(pg_connection_base_url).await;
-
-                *db_cleaned_state = true;
-            }
-        }
-
-        let test_db = create_test_db(pg_connection_base_url, &DB_TEMPLATIZED).await;
-
-        match test_db {
-            Ok(tdb) => tdb,
-            Err(db_err) => panic!("Failed to start test database: {}", db_err),
-        }
-    };
-
-    db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db).as_str()).await
+    todo!();
+    // let test_db = {
+    //     {
+    //         let mut db_cleaned_state = DB_CLEANED.lock().await;
+    //         if !*db_cleaned_state {
+    //             clear_old_dbs(pg_connection_base_url).await;
+    // 
+    //             *db_cleaned_state = true;
+    //         }
+    //     }
+    // 
+    //     let test_db = create_test_db(pg_connection_base_url, &DB_TEMPLATIZED).await;
+    // 
+    //     match test_db {
+    //         Ok(tdb) => tdb,
+    //         Err(db_err) => panic!("Failed to start test database: {}", db_err),
+    //     }
+    // };
+    // 
+    // db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db).as_str()).await
 }
 
 /// Prepares a database-connected application for integration tests, attaching routes via the provided
@@ -105,28 +106,29 @@ async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
 ///
 /// Expects that the [TEST_DB_URL](app_env::test::TEST_DB_URL) environment variable is populated.
 pub async fn prepare_application(routes: Router<Arc<SharedData>>) -> (Router, sqlx::PgPool) {
+    todo!();
     // As soon as we're done configuring the logger we can release the mutex
-    {
-        let mut mutex_handle = LOGGER_INITIALIZED.lock().await;
-        if !*mutex_handle {
-            if dotenv().is_err() {
-                println!("Test is running without .env file.");
-            }
-            configure_logger();
-
-            *mutex_handle = true;
-        }
-    }
-
-    let pg_connection_base_url = env::var(app_env::test::TEST_DB_URL).unwrap_or_else(|_| {
-        panic!(
-            "You must provide the {} environment variable as the base postgres connection string",
-            app_env::test::TEST_DB_URL
-        )
-    });
-
-    let db = prepare_db(pg_connection_base_url.as_str()).await;
-    let app = routes.with_state(Arc::new(SharedData { ext_cxn: db.clone() }));
-
-    (app, db)
+    // {
+    //     let mut mutex_handle = LOGGER_INITIALIZED.lock().await;
+    //     if !*mutex_handle {
+    //         if dotenv().is_err() {
+    //             println!("Test is running without .env file.");
+    //         }
+    //         configure_logger();
+    // 
+    //         *mutex_handle = true;
+    //     }
+    // }
+    // 
+    // let pg_connection_base_url = env::var(app_env::test::TEST_DB_URL).unwrap_or_else(|_| {
+    //     panic!(
+    //         "You must provide the {} environment variable as the base postgres connection string",
+    //         app_env::test::TEST_DB_URL
+    //     )
+    // });
+    // 
+    // let db = prepare_db(pg_connection_base_url.as_str()).await;
+    // let app = routes.with_state(Arc::new(SharedData { ext_cxn: db.clone() }));
+    // 
+    // (app, db)
 }

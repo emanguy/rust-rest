@@ -66,7 +66,6 @@ pub struct CreateUser {
 }
 
 pub mod driving_ports {
-    use mockall::automock;
     use super::*;
     use crate::external_connections::ExternalConnectivity;
     
