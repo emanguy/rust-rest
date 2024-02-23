@@ -22,6 +22,7 @@ pub enum ExtraInfo {
     Message(String),
 }
 
+/// Represents a generic 500 internal server error which turns into a [BasicErrorResponse]
 pub struct GenericErrorResponse(pub anyhow::Error);
 
 impl IntoResponse for GenericErrorResponse {

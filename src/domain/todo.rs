@@ -1,3 +1,4 @@
+use anyhow::{Context, Error};
 use crate::domain;
 use crate::domain::todo::driven_ports::{TaskReader, TaskWriter};
 use crate::domain::todo::driving_ports::TaskError;
@@ -45,6 +46,19 @@ pub mod driven_ports {
             new_task: &NewTask,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<i32, anyhow::Error>;
+
+        async fn delete_task(
+            &self,
+            task_id: i32,
+            ext_cxn: &mut impl ExternalConnectivity,
+        ) -> Result<(), anyhow::Error>;
+
+        async fn update_task(
+            &self,
+            task_id: i32,
+            update: &UpdateTask,
+            ext_cxn: &mut impl ExternalConnectivity,
+        ) -> Result<(), anyhow::Error>;
     }
 }
 
@@ -75,6 +89,22 @@ pub mod driving_ports {
             }
         }
     }
+    
+    #[cfg(test)]
+    #[allow(clippy::items_after_test_module)]
+    mod task_error_clone {
+        use anyhow::anyhow;
+        use crate::domain::todo::driving_ports::TaskError;
+
+        impl Clone for TaskError {
+            fn clone(&self) -> Self {
+                match self {
+                    Self::UserDoesNotExist => Self::UserDoesNotExist,
+                    Self::PortError(err) => Self::PortError(anyhow!(format!("{}", err))),
+                }
+            }
+        }
+    }
 
     pub trait TaskPort {
         async fn tasks_for_user(
@@ -100,6 +130,19 @@ pub mod driving_ports {
             u_detect: &impl domain::user::driven_ports::DetectUser,
             task_write: &impl driven_ports::TaskWriter,
         ) -> Result<i32, TaskError>;
+        async fn delete_task(
+            &self,
+            task_id: i32,
+            ext_cxn: &mut impl ExternalConnectivity,
+            task_write: &impl driven_ports::TaskWriter,
+        ) -> Result<(), anyhow::Error>;
+        async fn update_task(
+            &self,
+            task_id: i32,
+            update: &UpdateTask,
+            ext_cxn: &mut impl ExternalConnectivity,
+            task_write: &impl driven_ports::TaskWriter,
+        ) -> Result<(), anyhow::Error>;
     }
 }
 
@@ -148,6 +191,16 @@ impl driving_ports::TaskPort for TaskService {
             .create_task_for_user(user_id, task, &mut *ext_cxn)
             .await?;
         Ok(created_task_id)
+    }
+
+    async fn delete_task(&self, task_id: i32, ext_cxn: &mut impl ExternalConnectivity, task_write: &impl TaskWriter) -> Result<(), Error> {
+        task_write.delete_task(task_id, &mut *ext_cxn).await.context("deleting a task")?;
+        Ok(())
+    }
+
+    async fn update_task(&self, task_id: i32, update: &UpdateTask, ext_cxn: &mut impl ExternalConnectivity, task_write: &impl TaskWriter) -> Result<(), Error> {
+        task_write.update_task(task_id, update, &mut *ext_cxn).await.context("updating a task")?;
+        Ok(())
     }
 }
 
@@ -264,7 +317,7 @@ mod tests {
                     } if item_desc == "fghijk")
                 });
         }
-        
+
         #[tokio::test]
         async fn happy_path_not_found() {
             let user_persist = RwLock::new(InMemoryUserPersistence::new_with_users(&[
@@ -298,20 +351,20 @@ mod tests {
                 .await;
             assert_that!(task_fetch_result).is_ok().is_none();
         }
-        
+
         #[tokio::test]
         async fn fails_if_user_doesnt_exist() {
             let user_persist = InMemoryUserPersistence::new_locked();
             let task_persist = InMemoryUserTaskPersistence::new_locked();
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-            
+
             let task_fetch_result = TaskService{}.user_task_by_id(1, 5, &mut ext_cxn, &user_persist, &task_persist).await;
             let Err(TaskError::UserDoesNotExist) = task_fetch_result else {
                 panic!("Didn't get expected error for user not existing: {:#?}", task_fetch_result);
             };
         }
     }
-    
+
     mod create_task_for_user {
         use super::*;
 
@@ -353,14 +406,132 @@ mod tests {
             };
         }
     }
+    
+    mod delete_task {
+        use crate::domain::test_util::Connectivity;
+        use super::*;
+        
+        #[tokio::test]
+        async fn happy_path() {
+            let writer = RwLock::new(InMemoryUserTaskPersistence::new_with_tasks(&[
+                NewTaskWithOwner {
+                    owner: 1,
+                    task: NewTask {
+                        description: "abcde".to_owned(),
+                    },
+                },
+                NewTaskWithOwner {
+                    owner: 1,
+                    task: NewTask {
+                        description: "fghij".to_owned(),
+                    }
+                }
+            ]));
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            
+            let delete_result = TaskService{}.delete_task(2, &mut ext_cxn, &writer).await;
+            assert_that!(delete_result).is_ok();
+            
+            let locked_writer = writer.read().expect("task writer rw lock poisoned");
+            assert!(
+                matches!(locked_writer.tasks.as_slice(), [
+                    TodoTask {
+                        id: 1,
+                        owner_user_id: 1,
+                        item_desc,
+                    }
+                ] if item_desc == "abcde")
+            );
+        }
+        
+        #[tokio::test]
+        async fn happy_path_task_doesnt_exist() {
+            let writer = InMemoryUserTaskPersistence::new_locked();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            
+            let delete_result = TaskService{}.delete_task(5, &mut ext_cxn, &writer).await;
+            assert_that!(delete_result).is_ok();
+        }
+        
+        #[tokio::test]
+        async fn returns_port_err() {
+            let mut writer = InMemoryUserTaskPersistence::new_locked();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            {
+                let mut locked_writer = writer.write().expect("writer rw lock poisoned");
+                locked_writer.connected = Connectivity::Disconnected;
+            }
+            
+            let delete_result = TaskService{}.delete_task(1, &mut ext_cxn, &writer).await;
+            assert_that!(delete_result).is_err();
+        }
+    }
+    
+    mod update_task {
+        use crate::domain::test_util::Connectivity;
+        use super::*;
+        
+        #[tokio::test]
+        async fn happy_path() {
+            let writer = RwLock::new(InMemoryUserTaskPersistence::new_with_tasks(&[
+                NewTaskWithOwner {
+                    owner: 1,
+                    task: NewTask {
+                        description: "abcde".to_owned(),
+                    },
+                },
+                NewTaskWithOwner {
+                    owner: 1,
+                    task: NewTask {
+                        description: "fghij".to_owned(),
+                    },
+                },
+            ]));
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            
+            let update_result = TaskService{}.update_task(2, &UpdateTask {
+                description: "Something to do".to_owned(),
+            }, &mut ext_cxn, &writer).await;
+            
+            assert_that!(update_result).is_ok();
+            
+            let locked_writer = writer.read().expect("rw lock poisoned");
+            assert_eq!("Something to do", locked_writer.tasks[1].item_desc);
+        }
+        
+        #[tokio::test]
+        async fn happy_path_task_doesnt_exist() {
+            let writer = InMemoryUserTaskPersistence::new_locked();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            
+            let update_result = TaskService{}.update_task(5, &UpdateTask {
+                description: "Something to do".to_owned(),
+            }, &mut ext_cxn, &writer).await;
+            assert_that!(update_result).is_ok();
+        }
+        
+        #[tokio::test]
+        async fn returns_port_err() {
+            let mut raw_writer = InMemoryUserTaskPersistence::new();
+            raw_writer.connected = Connectivity::Disconnected;
+            let writer = RwLock::new(raw_writer);
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            
+            let update_result = TaskService{}.update_task(1, &UpdateTask{
+                description: "Something to do".to_owned(),
+            }, &mut ext_cxn, &writer).await;
+            assert_that!(update_result).is_err();
+        }
+    }
 }
 
 #[cfg(test)]
-pub(super) mod test_util {
+pub mod test_util {
     use super::*;
-    use crate::domain::test_util::Connectivity;
+    use crate::domain::test_util::{Connectivity, FakeImplementation};
     use anyhow::Error;
     use std::sync::RwLock;
+    use crate::domain::user::driven_ports::DetectUser;
 
     pub struct InMemoryUserTaskPersistence {
         pub tasks: Vec<TodoTask>,
@@ -463,6 +634,40 @@ pub(super) mod test_util {
                 .push(task_from_create(user_id, task_id, task));
             Ok(task_id)
         }
+
+        async fn delete_task(&self, task_id: i32, _ext_cxn: &mut impl ExternalConnectivity) -> Result<(), Error> {
+            let mut persistence = self.write().expect("task persist rw lock poisoned");
+            persistence.connected.blow_up_if_disconnected()?;
+
+            let item_index = persistence
+                .tasks
+                .iter()
+                .enumerate()
+                .find(|(_, task)| task.id == task_id)
+                .map(|(idx, _)| idx);
+            if let Some(idx) = item_index {
+                persistence.tasks.remove(idx);
+            }
+
+            Ok(())
+        }
+
+        async fn update_task(&self, task_id: i32, update: &UpdateTask, _ext_cxn: &mut impl ExternalConnectivity) -> Result<(), Error> {
+            let mut persistence = self.write().expect("task persist rw lock poisoned");
+            persistence.connected.blow_up_if_disconnected()?;
+
+            let item_index = persistence
+                .tasks
+                .iter()
+                .enumerate()
+                .find(|(_, task)| task.id == task_id)
+                .map(|(idx, _)| idx);
+            if let Some(idx) = item_index {
+                persistence.tasks[idx].item_desc = update.description.clone();
+            }
+            
+            Ok(())
+        }
     }
 
     pub fn task_from_create(user_id: i32, task_id: i32, new_task: &NewTask) -> TodoTask {
@@ -470,6 +675,35 @@ pub(super) mod test_util {
             id: task_id,
             owner_user_id: user_id,
             item_desc: new_task.description.clone(),
+        }
+    }
+    
+    pub struct MockTaskService {
+        tasks_for_user_result: FakeImplementation<i32, Result<Vec<TodoTask>, TaskError>>,
+    }
+    
+    impl driving_ports::TaskPort for RwLock<MockTaskService> {
+        async fn tasks_for_user(&self, user_id: i32, _ext_cxn: &mut impl ExternalConnectivity, _u_detect: &impl DetectUser, _task_read: &impl TaskReader) -> Result<Vec<TodoTask>, TaskError> {
+            let mut locked_self = self.write().expect("mock task service rwlock poisoned");
+            locked_self.tasks_for_user_result.save_arguments(user_id);
+            
+            locked_self.tasks_for_user_result.return_value_result()
+        }
+
+        async fn user_task_by_id(&self, user_id: i32, task_id: i32, ext_cxn: &mut impl ExternalConnectivity, u_detect: &impl DetectUser, task_read: &impl TaskReader) -> Result<Option<TodoTask>, TaskError> {
+            todo!()
+        }
+
+        async fn create_task_for_user(&self, user_id: i32, task: &NewTask, ext_cxn: &mut impl ExternalConnectivity, u_detect: &impl DetectUser, task_write: &impl TaskWriter) -> Result<i32, TaskError> {
+            todo!()
+        }
+
+        async fn delete_task(&self, task_id: i32, ext_cxn: &mut impl ExternalConnectivity, task_write: &impl TaskWriter) -> Result<(), Error> {
+            todo!()
+        }
+
+        async fn update_task(&self, task_id: i32, update: &UpdateTask, ext_cxn: &mut impl ExternalConnectivity, task_write: &impl TaskWriter) -> Result<(), Error> {
+            todo!()
         }
     }
 }

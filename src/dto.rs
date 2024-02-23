@@ -72,7 +72,15 @@ impl From<domain::todo::TodoTask> for TodoTask {
 #[derive(Deserialize, Serialize, Validate)]
 pub struct UpdateTask {
     #[validate(length(min = 1))]
-    pub item_desc: String,
+    pub description: String,
+}
+
+impl From<UpdateTask> for domain::todo::UpdateTask {
+    fn from(value: UpdateTask) -> Self {
+       domain::todo::UpdateTask {
+           description: value.description,
+       } 
+    }
 }
 
 #[cfg(test)]
