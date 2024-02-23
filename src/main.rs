@@ -8,7 +8,7 @@ use dotenv::dotenv;
 use log::*;
 use sqlx::PgPool;
 
-// mod api;
+mod api;
 mod app_env;
 // mod db;
 mod domain;

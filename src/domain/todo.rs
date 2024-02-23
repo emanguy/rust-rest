@@ -16,6 +16,10 @@ pub struct NewTask {
     pub description: String,
 }
 
+pub struct UpdateTask {
+    pub description: String,
+}
+
 pub mod driven_ports {
     use super::*;
     use crate::external_connections::ExternalConnectivity;
@@ -94,7 +98,7 @@ pub mod driving_ports {
             task: &NewTask,
             ext_cxn: &mut impl ExternalConnectivity,
             u_detect: &impl domain::user::driven_ports::DetectUser,
-            task_read: &impl driven_ports::TaskWriter,
+            task_write: &impl driven_ports::TaskWriter,
         ) -> Result<i32, TaskError>;
     }
 }
@@ -149,41 +153,43 @@ impl driving_ports::TaskPort for TaskService {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::RwLock;
-    use speculoos::prelude::*;
     use super::test_util::*;
     use super::*;
     use crate::domain::todo::driving_ports::TaskPort;
-    use crate::domain::user::CreateUser;
     use crate::domain::user::test_util::InMemoryUserPersistence;
+    use crate::domain::user::CreateUser;
     use crate::external_connections;
+    use speculoos::prelude::*;
+    use std::sync::RwLock;
 
     mod tasks_for_user {
         use super::*;
-        
+
         #[tokio::test]
-        async fn tasks_for_user_happy_path() {
+        async fn happy_path() {
             let user_persist = RwLock::new(InMemoryUserPersistence::new_with_users(&[
                 domain::user::test_util::user_create_default(),
                 domain::user::test_util::user_create_default(),
             ]));
             let task_persist = RwLock::new(InMemoryUserTaskPersistence::new_with_tasks(&[
-                NewTaskWithOwner{
+                NewTaskWithOwner {
                     owner: 1,
                     task: NewTask {
                         description: "Something to do".to_owned(),
                     },
                 },
-                NewTaskWithOwner{
+                NewTaskWithOwner {
                     owner: 2,
                     task: NewTask {
                         description: "Another thing to do".to_owned(),
-                    }
-                }
+                    },
+                },
             ]));
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-            
-            let fetched_tasks = TaskService{}.tasks_for_user(1, &mut ext_cxn, &user_persist, &task_persist).await;
+
+            let fetched_tasks = TaskService {}
+                .tasks_for_user(1, &mut ext_cxn, &user_persist, &task_persist)
+                .await;
             assert_that!(fetched_tasks).is_ok().matches(|tasks| {
                 matches!(tasks.as_slice(), [
                     TodoTask {
@@ -194,8 +200,117 @@ mod tests {
                 ] if item_desc == "Something to do")
             });
         }
+
+        #[tokio::test]
+        async fn returns_error_on_nonexistent_user() {
+            let user_persist = InMemoryUserPersistence::new_locked();
+            let task_persist = InMemoryUserTaskPersistence::new_locked();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+
+            let fetched_task_result = TaskService {}
+                .tasks_for_user(1, &mut ext_cxn, &user_persist, &task_persist)
+                .await;
+            let Err(TaskError::UserDoesNotExist) = fetched_task_result else {
+                panic!(
+                    "Got an unexpected result from task lookup: {:#?}",
+                    fetched_task_result
+                );
+            };
+        }
     }
-    
+
+    mod user_task_by_id {
+        use super::*;
+
+        #[tokio::test]
+        async fn happy_path() {
+            let user_persist = RwLock::new(InMemoryUserPersistence::new_with_users(&[
+                domain::user::test_util::user_create_default(),
+                domain::user::test_util::user_create_default(),
+            ]));
+            let task_persist = RwLock::new(InMemoryUserTaskPersistence::new_with_tasks(&[
+                NewTaskWithOwner {
+                    owner: 1,
+                    task: NewTask {
+                        description: "abcde".to_owned(),
+                    },
+                },
+                NewTaskWithOwner {
+                    owner: 1,
+                    task: NewTask {
+                        description: "fghijk".to_owned(),
+                    },
+                },
+                NewTaskWithOwner {
+                    owner: 2,
+                    task: NewTask {
+                        description: "lmnop".to_owned(),
+                    },
+                },
+            ]));
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+
+            let task_fetch_result = TaskService {}
+                .user_task_by_id(1, 2, &mut ext_cxn, &user_persist, &task_persist)
+                .await;
+            assert_that!(task_fetch_result)
+                .is_ok()
+                .is_some()
+                .matches(|task| {
+                    matches!(task, TodoTask {
+                       id: 2,
+                       owner_user_id: 1,
+                       item_desc
+                    } if item_desc == "fghijk")
+                });
+        }
+        
+        #[tokio::test]
+        async fn happy_path_not_found() {
+            let user_persist = RwLock::new(InMemoryUserPersistence::new_with_users(&[
+                domain::user::test_util::user_create_default(),
+                domain::user::test_util::user_create_default(),
+            ]));
+            let task_persist = RwLock::new(InMemoryUserTaskPersistence::new_with_tasks(&[
+                NewTaskWithOwner {
+                    owner: 1,
+                    task: NewTask {
+                        description: "abcde".to_owned(),
+                    },
+                },
+                NewTaskWithOwner {
+                    owner: 1,
+                    task: NewTask {
+                        description: "fghijk".to_owned(),
+                    },
+                },
+                NewTaskWithOwner {
+                    owner: 2,
+                    task: NewTask {
+                        description: "lmnop".to_owned(),
+                    },
+                },
+            ]));
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+
+            let task_fetch_result = TaskService {}
+                .user_task_by_id(1, 3, &mut ext_cxn, &user_persist, &task_persist)
+                .await;
+            assert_that!(task_fetch_result).is_ok().is_none();
+        }
+        
+        #[tokio::test]
+        async fn fails_if_user_doesnt_exist() {
+            let user_persist = InMemoryUserPersistence::new_locked();
+            let task_persist = InMemoryUserTaskPersistence::new_locked();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            
+            let task_fetch_result = TaskService{}.user_task_by_id(1, 5, &mut ext_cxn, &user_persist, &task_persist).await;
+            let Err(TaskError::UserDoesNotExist) = task_fetch_result else {
+                panic!("Didn't get expected error for user not existing: {:#?}", task_fetch_result);
+            };
+        }
+    }
     
     mod create_task_for_user {
         use super::*;
@@ -203,19 +318,20 @@ mod tests {
         #[tokio::test]
         async fn happy_path() {
             let task_persist = InMemoryUserTaskPersistence::new_locked();
-            let user_persist = RwLock::new(InMemoryUserPersistence::new_with_users(&[
-                CreateUser {
+            let user_persist =
+                RwLock::new(InMemoryUserPersistence::new_with_users(&[CreateUser {
                     first_name: "John".to_owned(),
                     last_name: "Doe".to_owned(),
-                }
-            ]));
+                }]));
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
             let task = NewTask {
                 description: "Something to do".to_owned(),
             };
-            let service = TaskService{};
+            let service = TaskService {};
 
-            let create_result = service.create_task_for_user(1, &task, &mut ext_cxn, &user_persist, &task_persist).await;
+            let create_result = service
+                .create_task_for_user(1, &task, &mut ext_cxn, &user_persist, &task_persist)
+                .await;
             assert_that!(create_result).is_ok_containing(1);
         }
 
@@ -251,7 +367,7 @@ pub(super) mod test_util {
         pub connected: Connectivity,
         highest_task_id: i32,
     }
-    
+
     pub struct NewTaskWithOwner {
         pub owner: i32,
         pub task: NewTask,
@@ -265,14 +381,18 @@ pub(super) mod test_util {
                 highest_task_id: 0,
             }
         }
-        
+
         pub fn new_with_tasks(tasks: &[NewTaskWithOwner]) -> InMemoryUserTaskPersistence {
             InMemoryUserTaskPersistence {
-                tasks: tasks.iter().enumerate().map(|(index, task_with_owner)| TodoTask {
-                    id: index as i32 + 1,
-                    owner_user_id: task_with_owner.owner,
-                    item_desc: task_with_owner.task.description.clone(),
-                }).collect(),
+                tasks: tasks
+                    .iter()
+                    .enumerate()
+                    .map(|(index, task_with_owner)| TodoTask {
+                        id: index as i32 + 1,
+                        owner_user_id: task_with_owner.owner,
+                        item_desc: task_with_owner.task.description.clone(),
+                    })
+                    .collect(),
                 connected: Connectivity::Connected,
                 highest_task_id: tasks.len() as i32,
             }
@@ -325,7 +445,7 @@ pub(super) mod test_util {
             Ok(task)
         }
     }
-    
+
     impl driven_ports::TaskWriter for RwLock<InMemoryUserTaskPersistence> {
         async fn create_task_for_user(
             &self,

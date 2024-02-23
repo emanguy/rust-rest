@@ -44,6 +44,30 @@ pub struct NewTask {
     pub item_desc: String,
 }
 
+impl From<NewTask> for domain::todo::NewTask {
+    fn from(value: NewTask) -> Self {
+       domain::todo::NewTask {
+           description: value.item_desc,
+       } 
+    }
+}
+
+/// DTO for a returned task on the API
+#[derive(Serialize)]
+pub struct TodoTask {
+    id: i32,
+    description: String,
+}
+
+impl From<domain::todo::TodoTask> for TodoTask {
+    fn from(value: domain::todo::TodoTask) -> Self {
+        TodoTask {
+            id: value.id,
+            description: value.item_desc,
+        }
+    }
+}
+
 /// DTO for updating a task's content via the API
 #[derive(Deserialize, Serialize, Validate)]
 pub struct UpdateTask {
@@ -68,4 +92,9 @@ mod dto_tests {
         assert!(field_validations.contains_key("first_name"));
         assert!(field_validations.contains_key("last_name"));
     }
+}
+
+#[derive(Serialize)]
+pub struct InsertedTask {
+    pub id: i32,
 }
