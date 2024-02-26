@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::ErrorResponse;
+use axum::response::{ErrorResponse, IntoResponse, Response};
 use axum::Router;
 use axum::routing::{delete, patch};
 use log::{error, info};
@@ -15,10 +15,10 @@ use crate::routing_utils::{GenericErrorResponse, Json, ValidationErrorResponse};
 pub fn task_routes() -> Router<Arc<SharedData>> {
     Router::new()
         .route("/tasks/:task_id", patch(|State(app_state): AppState, Path(task_id): Path<i32>, Json(update): Json<UpdateTask>| async move {
-            let ext_cxn = app_state.ext_cxn.clone();
+            let mut ext_cxn = app_state.ext_cxn.clone();
             let task_service = domain::todo::TaskService{};
             
-            update_task(task_id, update, ext_cxn, task_service).await
+            update_task(task_id, update, &mut ext_cxn, &task_service).await
         }))
         .route("/tasks/:task_id", delete(|State(app_state): AppState, Path(task_id): Path<i32>| async move {
             let ext_cxn = app_state.ext_cxn.clone();
@@ -32,9 +32,9 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
 async fn update_task(
     task_id: i32,
     task_data: dto::UpdateTask,
-    mut ext_cxn: impl ExternalConnectivity,
-    task_service: impl domain::todo::driving_ports::TaskPort,
-) -> Result<StatusCode, ErrorResponse> {
+    ext_cxn: &mut impl ExternalConnectivity,
+    task_service: &impl domain::todo::driving_ports::TaskPort,
+) -> Result<StatusCode, Response> {
     info!("Updating task {task_id}");
     task_data
         .validate()
@@ -43,12 +43,12 @@ async fn update_task(
     let domain_update = domain::todo::UpdateTask::from(task_data);
     let task_writer = persistence::db_todo_driven_ports::DbTaskWriter{};
     
-    let update_result = task_service.update_task(task_id, &domain_update, &mut ext_cxn, &task_writer).await;
+    let update_result = task_service.update_task(task_id, &domain_update, &mut *ext_cxn, &task_writer).await;
     match update_result {
         Ok(_) => Ok(StatusCode::OK),
         Err(db_err) => {
             error!("Update task failure: {db_err}");
-            Err(GenericErrorResponse(db_err).into())
+            Err(GenericErrorResponse(db_err).into_response())
         }
     }
 }
@@ -58,7 +58,7 @@ async fn delete_task(
     task_id: i32,
     mut ext_cxn: impl ExternalConnectivity,
     task_service: impl domain::todo::driving_ports::TaskPort,
-) -> Result<StatusCode, ErrorResponse> {
+) -> Result<StatusCode, Response> {
     info!("Deleting task {task_id}");
     let task_write = persistence::db_todo_driven_ports::DbTaskWriter{};
     
@@ -67,9 +67,59 @@ async fn delete_task(
         Ok(_) => Ok(StatusCode::OK),
         Err(db_err) => {
             error!("Failed to delete task: {db_err}");
-            Err(GenericErrorResponse(db_err).into())
+            Err(GenericErrorResponse(db_err).into_response())
         }
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{domain, external_connections};
+    use speculoos::prelude::*;
+    use anyhow::anyhow;
+    use std::sync::Mutex;
 
+    mod update_task {
+        use super::*;
+
+        #[tokio::test]
+        async fn happy_path() {
+            let mut task_service_raw = domain::todo::test_util::MockTaskService::new();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+
+            task_service_raw.update_task_result.set_returned_anyhow(Ok(()));
+            let task_service = Mutex::new(task_service_raw);
+
+            let update_task_response = update_task(2, UpdateTask {
+                description: "Something to do".to_owned(),
+            }, &mut ext_cxn, &task_service).await;
+            assert_that!(update_task_response).is_ok_containing(StatusCode::OK);
+
+            let locked_task_service = task_service.lock().expect("task service mutex poisoned");
+            assert!(
+                matches!(locked_task_service.update_task_result.calls(), [
+                    (2, domain::todo::UpdateTask {
+                        description,
+                    })
+                ] if description == "Something to do")
+            )
+        }
+
+        #[tokio::test]
+        async fn returns_500_on_failed_update() {
+            let mut task_service_raw = domain::todo::test_util::MockTaskService::new();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+
+            task_service_raw.update_task_result.set_returned_anyhow(Err(anyhow!("Something went wrong!")));
+            let task_service = Mutex::new(task_service_raw);
+
+            let update_task_response = update_task(2, UpdateTask {
+                description: "Something to do".to_owned(),
+            }, &mut ext_cxn, &task_service).await;
+            if let Err(err_resp) = update_task_response {
+                let response = err_resp.
+            }
+        }
+    }
+}

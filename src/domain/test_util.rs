@@ -20,6 +20,15 @@ pub struct FakeImplementation<Args, Ret> {
 }
 
 impl <Args, Ret> FakeImplementation<Args, Ret> {
+    pub fn new() -> FakeImplementation<Args, Ret> {
+        FakeImplementation {
+            saved_arguments: Vec::new(),
+            return_value: None,
+        }
+    }
+}
+
+impl <Args, Ret> FakeImplementation<Args, Ret> {
     pub fn save_arguments(&mut self, arguments: Args) {
         self.saved_arguments.push(arguments)
     }
