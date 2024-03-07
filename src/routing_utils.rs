@@ -3,15 +3,18 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum_macros::FromRequest;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use validator::ValidationErrors;
 
 /// Contains diagnostic information about an API failure
 #[derive(Serialize, Debug)]
+#[cfg_attr(test, derive(Deserialize))]
 pub struct BasicErrorResponse {
     pub error_code: String,
     pub error_description: String,
+    
+    #[serde(skip_deserializing)]
     pub extra_info: Option<ExtraInfo>,
 }
 

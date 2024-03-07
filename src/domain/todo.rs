@@ -747,6 +747,10 @@ pub mod test_util {
                 update_task_result: FakeImplementation::new(),
             }
         }
+        
+        pub fn new_locked() -> Mutex<MockTaskService> {
+            Mutex::new(Self::new())
+        }
     }
 
     impl driving_ports::TaskPort for Mutex<MockTaskService> {

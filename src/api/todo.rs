@@ -21,10 +21,10 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
             update_task(task_id, update, &mut ext_cxn, &task_service).await
         }))
         .route("/tasks/:task_id", delete(|State(app_state): AppState, Path(task_id): Path<i32>| async move {
-            let ext_cxn = app_state.ext_cxn.clone();
+            let mut ext_cxn = app_state.ext_cxn.clone();
             let task_service = domain::todo::TaskService{};
             
-            delete_task(task_id, ext_cxn, task_service).await
+            delete_task(task_id, &mut ext_cxn, &task_service).await
         }))
 }
 
@@ -34,7 +34,7 @@ async fn update_task(
     task_data: dto::UpdateTask,
     ext_cxn: &mut impl ExternalConnectivity,
     task_service: &impl domain::todo::driving_ports::TaskPort,
-) -> Result<StatusCode, Response> {
+) -> Result<StatusCode, ErrorResponse> {
     info!("Updating task {task_id}");
     task_data
         .validate()
@@ -48,7 +48,7 @@ async fn update_task(
         Ok(_) => Ok(StatusCode::OK),
         Err(db_err) => {
             error!("Update task failure: {db_err}");
-            Err(GenericErrorResponse(db_err).into_response())
+            Err(GenericErrorResponse(db_err).into())
         }
     }
 }
@@ -56,13 +56,13 @@ async fn update_task(
 /// Deletes a task
 async fn delete_task(
     task_id: i32,
-    mut ext_cxn: impl ExternalConnectivity,
-    task_service: impl domain::todo::driving_ports::TaskPort,
+    ext_cxn: &mut impl ExternalConnectivity,
+    task_service: &impl domain::todo::driving_ports::TaskPort,
 ) -> Result<StatusCode, Response> {
     info!("Deleting task {task_id}");
     let task_write = persistence::db_todo_driven_ports::DbTaskWriter{};
     
-    let delete_result = task_service.delete_task(task_id, &mut ext_cxn, &task_write).await;
+    let delete_result = task_service.delete_task(task_id, &mut *ext_cxn, &task_write).await;
     match delete_result {
         Ok(_) => Ok(StatusCode::OK),
         Err(db_err) => {
@@ -79,6 +79,8 @@ mod tests {
     use speculoos::prelude::*;
     use anyhow::anyhow;
     use std::sync::Mutex;
+    use hyper::body;
+    use crate::routing_utils::BasicErrorResponse;
 
     mod update_task {
         use super::*;
@@ -117,9 +119,62 @@ mod tests {
             let update_task_response = update_task(2, UpdateTask {
                 description: "Something to do".to_owned(),
             }, &mut ext_cxn, &task_service).await;
-            if let Err(err_resp) = update_task_response {
-                let response = err_resp.
-            }
+            let real_response = update_task_response.into_response();
+            
+            assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, real_response.status());
+            
+            let body_bytes_result = body::to_bytes(real_response.into_body()).await;
+            let Ok(body_bytes) = body_bytes_result else {
+                panic!("Could not extract body: {:#?}", body_bytes_result);
+            };
+            
+            let deserialized_body_result: Result<BasicErrorResponse, _> = serde_json::from_slice(&body_bytes);
+            assert_that!(deserialized_body_result).is_ok().matches(|body| {
+                body.error_code == "internal_error"
+            });
+        }
+        
+        #[tokio::test]
+        async fn returns_400_on_bad_input() {
+            let task_service = domain::todo::test_util::MockTaskService::new_locked();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            
+            let update_task_response = update_task(5, UpdateTask {
+                description: String::new(),
+            }, &mut ext_cxn, &task_service).await;
+            let real_response = update_task_response.into_response();
+            
+            assert_eq!(StatusCode::BAD_REQUEST, real_response.status());
+            
+            let body_bytes_result = body::to_bytes(real_response.into_body()).await;
+            let Ok(body_bytes) = body_bytes_result else { 
+                panic!("Could not extract HTTP body bytes: {:#?}", body_bytes_result);
+            };
+            
+            let deserialized_body_result: Result<BasicErrorResponse, _> = serde_json::from_slice(&body_bytes);
+            assert_that!(deserialized_body_result).is_ok().matches(|response_body| {
+                response_body.error_code == "invalid_input"
+            });
+        }
+    }
+    
+    mod delete_task {
+        use super::*;
+        
+        #[tokio::test]
+        async fn happy_path() {
+            let mut task_service_raw = domain::todo::test_util::MockTaskService::new();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            
+            task_service_raw.delete_task_result.set_returned_anyhow(Ok(()));
+            let task_service = Mutex::new(task_service_raw);
+            
+            let delete_task_result = delete_task(5, &mut ext_cxn, &task_service).await;
+            let Ok(status) = delete_task_result else {
+                panic!("Didn't receive expected response: {:#?}", delete_task_result);
+            };
+            
+            
         }
     }
 }
