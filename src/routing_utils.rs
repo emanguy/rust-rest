@@ -3,7 +3,10 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum_macros::FromRequest;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+
+#[cfg(test)]
+use serde::Deserialize;
 
 use validator::ValidationErrors;
 
@@ -13,7 +16,7 @@ use validator::ValidationErrors;
 pub struct BasicErrorResponse {
     pub error_code: String,
     pub error_description: String,
-    
+
     #[serde(skip_deserializing)]
     pub extra_info: Option<ExtraInfo>,
 }
@@ -36,8 +39,9 @@ impl IntoResponse for GenericErrorResponse {
                 error_code: "internal_error".to_owned(),
                 error_description: format!("An unexpected error occurred: {}", self.0),
                 extra_info: None,
-            })
-        ).into_response()
+            }),
+        )
+            .into_response()
     }
 }
 

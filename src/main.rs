@@ -2,11 +2,10 @@ use std::env;
 use std::sync::Arc;
 
 use axum::extract::State;
-use axum::routing::get;
+
 use axum::Router;
 use dotenv::dotenv;
 use log::*;
-use sqlx::PgPool;
 
 mod api;
 mod app_env;
@@ -48,13 +47,11 @@ async fn main() {
 
     let sqlx_db_connection = db::connect_sqlx(&db_url).await;
     let ext_cxn = persistence::ExternalConnectivity::new(sqlx_db_connection);
-    
+
     let router = Router::new()
         .nest("/users", api::user::user_routes())
         .nest("/tasks", api::todo::task_routes())
-        .with_state(Arc::new(SharedData {
-            ext_cxn,
-        }));
+        .with_state(Arc::new(SharedData { ext_cxn }));
 
     info!("Starting server.");
     axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())

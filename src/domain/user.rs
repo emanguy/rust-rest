@@ -3,7 +3,6 @@ use crate::domain::Error;
 use crate::external_connections::ExternalConnectivity;
 use anyhow::Context;
 
-
 #[derive(PartialEq, Eq, Debug, Default)]
 #[cfg_attr(test, derive(Clone))]
 pub struct TodoUser {
@@ -15,8 +14,6 @@ pub struct TodoUser {
 pub mod driven_ports {
     use super::*;
     use crate::external_connections::ExternalConnectivity;
-    
-
 
     pub trait UserReader: Sync {
         async fn get_all(
@@ -29,7 +26,6 @@ pub mod driven_ports {
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<Option<TodoUser>, anyhow::Error>;
     }
-
 
     pub trait UserWriter: Sync {
         async fn create_user(
@@ -68,7 +64,6 @@ pub struct CreateUser {
 pub mod driving_ports {
     use super::*;
     use crate::external_connections::ExternalConnectivity;
-    
 
     #[derive(Debug, Error)]
     pub enum CreateUserError {
@@ -80,14 +75,16 @@ pub mod driving_ports {
 
     #[cfg(test)]
     mod cue_clone {
-        use anyhow::anyhow;
         use crate::domain::user::driving_ports::CreateUserError;
+        use anyhow::anyhow;
 
         impl Clone for CreateUserError {
             fn clone(&self) -> Self {
                 match self {
                     CreateUserError::UserAlreadyExists => CreateUserError::UserAlreadyExists,
-                    CreateUserError::PortError(anyhow_err) => CreateUserError::PortError(anyhow!(format!("{}", anyhow_err)))
+                    CreateUserError::PortError(anyhow_err) => {
+                        CreateUserError::PortError(anyhow!(format!("{}", anyhow_err)))
+                    }
                 }
             }
         }
@@ -186,7 +183,6 @@ mod verify_user_exists_tests {
             .matches(|inner_err| matches!(inner_err, UserExistsErr::PortError(_)));
     }
 }
-
 
 impl driving_ports::UserPort for UserService {
     async fn get_users(
@@ -369,8 +365,8 @@ pub(super) mod test_util {
     use crate::domain::user::driven_ports::{DetectUser, UserDescription, UserReader, UserWriter};
     use anyhow::Error;
 
-    use std::sync::RwLock;
     use crate::domain::user::driving_ports::UserPort;
+    use std::sync::RwLock;
 
     pub struct InMemoryUserPersistence {
         highest_user_id: i32,
@@ -408,7 +404,6 @@ pub(super) mod test_util {
         }
     }
 
-
     impl driven_ports::UserWriter for RwLock<InMemoryUserPersistence> {
         async fn create_user(
             &self,
@@ -429,7 +424,6 @@ pub(super) mod test_util {
             Ok(persister.highest_user_id)
         }
     }
-
 
     impl driven_ports::UserReader for RwLock<InMemoryUserPersistence> {
         async fn get_all(
@@ -491,7 +485,6 @@ pub(super) mod test_util {
         last_name: String,
     }
 
-
     impl DetectUser for RwLock<InMemoryUserPersistence> {
         async fn user_exists(
             &self,
@@ -518,20 +511,32 @@ pub(super) mod test_util {
         }
     }
 
-    struct MockUserService{
+    struct MockUserService {
         get_users_response: FakeImplementation<(), Result<Vec<TodoUser>, Error>>,
         create_user_response: FakeImplementation<CreateUser, Result<i32, CreateUserError>>,
     }
 
     impl UserPort for RwLock<MockUserService> {
-        async fn get_users(&self, _: &mut impl ExternalConnectivity, _: &impl UserReader) -> Result<Vec<TodoUser>, Error> {
+        async fn get_users(
+            &self,
+            _: &mut impl ExternalConnectivity,
+            _: &impl UserReader,
+        ) -> Result<Vec<TodoUser>, Error> {
             let locked_self = self.read().expect("Lock is poisoned!");
             locked_self.get_users_response.return_value_anyhow()
         }
 
-        async fn create_user(&self, new_user: &CreateUser, _: &mut impl ExternalConnectivity, _: &impl UserWriter, _: &impl DetectUser) -> Result<i32, CreateUserError> {
+        async fn create_user(
+            &self,
+            new_user: &CreateUser,
+            _: &mut impl ExternalConnectivity,
+            _: &impl UserWriter,
+            _: &impl DetectUser,
+        ) -> Result<i32, CreateUserError> {
             let mut locked_self = self.write().expect("Lock is poisoned!");
-            locked_self.create_user_response.save_arguments(new_user.clone());
+            locked_self
+                .create_user_response
+                .save_arguments(new_user.clone());
             locked_self.create_user_response.return_value_result()
         }
     }

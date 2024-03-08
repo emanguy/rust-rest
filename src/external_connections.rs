@@ -1,4 +1,3 @@
-
 use sqlx::PgConnection;
 
 use std::fmt::{Debug, Display};
@@ -7,10 +6,12 @@ use thiserror::Error;
 
 pub trait TransactableExternalConnectivity: ExternalConnectivity + Transactable + Sync {}
 
-impl <T: ExternalConnectivity + Transactable + Sync> TransactableExternalConnectivity for T {}
+impl<T: ExternalConnectivity + Transactable + Sync> TransactableExternalConnectivity for T {}
 
 pub trait ExternalConnectivity: Sync {
-    type Handle<'handle>: ConnectionHandle + 'handle where Self: 'handle;
+    type Handle<'handle>: ConnectionHandle + 'handle
+    where
+        Self: 'handle;
     type Error: Debug + Display;
 
     async fn database_cxn(&mut self) -> Result<Self::Handle<'_>, Self::Error>;
@@ -20,14 +21,14 @@ pub trait ConnectionHandle {
     fn borrow_connection(&mut self) -> &mut PgConnection;
 }
 
-
 pub trait Transactable: Sync {
-    type Handle<'handle>: TransactionHandle + 'handle where Self: 'handle;
+    type Handle<'handle>: TransactionHandle + 'handle
+    where
+        Self: 'handle;
     type Error: Debug + Display;
 
     async fn start_transaction(&self) -> Result<Self::Handle<'_>, Self::Error>;
 }
-
 
 pub trait TransactionHandle: Sync {
     type Error: Debug + Display;
@@ -35,6 +36,7 @@ pub trait TransactionHandle: Sync {
     async fn commit(self) -> Result<(), Self::Error>;
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum TxOrSourceError<SourceValue, SourceErr, TxBeginErr, TxCommitErr>
 where
@@ -65,6 +67,7 @@ where
 /// invokes [transaction_context] with the started transaction. When [transaction_context] completes,
 /// the transaction handle passed to it is committed as long as [transaction_context] does not return
 /// a [Result::Err].
+#[allow(dead_code)]
 pub async fn with_transaction<'tx, TxAble, ErrBegin, Handle, ErrCommit, Fn, Fut, Ret, ErrSource>(
     tx_origin: &'tx TxAble,
     transaction_context: Fn,
@@ -144,7 +147,6 @@ pub mod test_util {
     use crate::external_connections::{
         ConnectionHandle, ExternalConnectivity, Transactable, TransactionHandle,
     };
-    
 
     use sqlx::PgConnection;
     use std::convert::Infallible;
@@ -177,24 +179,21 @@ pub mod test_util {
 
     // TODO implement ConnectionHandle for MockHandle then return a MockHandle from database_cxn
 
-
     impl ConnectionHandle for MockHandle {
         fn borrow_connection(&mut self) -> &mut PgConnection {
             panic!("You cannot acquire a real database connection in a test.")
         }
     }
 
-
     impl ExternalConnectivity for FakeExternalConnectivity {
         type Handle<'cxn> = MockHandle;
         type Error = Infallible;
 
         #[allow(clippy::diverging_sub_expression)]
-        async fn database_cxn(& mut self) -> Result<Self::Handle<'_>, Self::Error> {
+        async fn database_cxn(&mut self) -> Result<Self::Handle<'_>, Self::Error> {
             Ok(MockHandle {})
         }
     }
-
 
     impl TransactionHandle for FakeExternalConnectivity {
         type Error = Infallible;
@@ -209,7 +208,6 @@ pub mod test_util {
             Ok(())
         }
     }
-
 
     impl Transactable for FakeExternalConnectivity {
         type Handle<'handle> = FakeExternalConnectivity;

@@ -1,7 +1,7 @@
+use crate::domain;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
-use crate::domain;
 
 /// DTO for a constructed user
 #[derive(Serialize)]
@@ -47,9 +47,9 @@ pub struct NewTask {
 
 impl From<NewTask> for domain::todo::NewTask {
     fn from(value: NewTask) -> Self {
-       domain::todo::NewTask {
-           description: value.item_desc,
-       } 
+        domain::todo::NewTask {
+            description: value.item_desc,
+        }
     }
 }
 
@@ -78,9 +78,9 @@ pub struct UpdateTask {
 
 impl From<UpdateTask> for domain::todo::UpdateTask {
     fn from(value: UpdateTask) -> Self {
-       domain::todo::UpdateTask {
-           description: value.description,
-       } 
+        domain::todo::UpdateTask {
+            description: value.description,
+        }
     }
 }
 

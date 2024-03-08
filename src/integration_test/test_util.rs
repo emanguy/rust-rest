@@ -1,3 +1,4 @@
+use crate::persistence::ExternalConnectivity;
 use crate::{app_env, configure_logger, db, SharedData};
 use axum::Router;
 use dotenv::dotenv;
@@ -7,7 +8,6 @@ use sqlx::{Connection, PgConnection, Row};
 use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::persistence::ExternalConnectivity;
 
 lazy_static! {
     static ref LOGGER_INITIALIZED: Mutex<bool> = Mutex::from(false);
@@ -84,19 +84,19 @@ async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
             let mut db_cleaned_state = DB_CLEANED.lock().await;
             if !*db_cleaned_state {
                 clear_old_dbs(pg_connection_base_url).await;
-    
+
                 *db_cleaned_state = true;
             }
         }
-    
+
         let test_db = create_test_db(pg_connection_base_url, &DB_TEMPLATIZED).await;
-    
+
         match test_db {
             Ok(tdb) => tdb,
             Err(db_err) => panic!("Failed to start test database: {}", db_err),
         }
     };
-    
+
     db::connect_sqlx(format!("{}/{}", pg_connection_base_url, test_db).as_str()).await
 }
 
@@ -114,20 +114,22 @@ pub async fn prepare_application(routes: Router<Arc<SharedData>>) -> (Router, sq
                 println!("Test is running without .env file.");
             }
             configure_logger();
-    
+
             *mutex_handle = true;
         }
     }
-    
+
     let pg_connection_base_url = env::var(app_env::test::TEST_DB_URL).unwrap_or_else(|_| {
         panic!(
             "You must provide the {} environment variable as the base postgres connection string",
             app_env::test::TEST_DB_URL
         )
     });
-    
+
     let db = prepare_db(pg_connection_base_url.as_str()).await;
-    let app = routes.with_state(Arc::new(SharedData { ext_cxn: ExternalConnectivity::new(db.clone()) }));
-    
+    let app = routes.with_state(Arc::new(SharedData {
+        ext_cxn: ExternalConnectivity::new(db.clone()),
+    }));
+
     (app, db)
 }

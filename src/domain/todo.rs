@@ -83,10 +83,10 @@ pub mod driving_ports {
             match value {
                 domain::user::UserExistsErr::UserDoesNotExist(user_id) => {
                     error!("User {} didn't exist when fetching tasks.", user_id);
-                    return TaskError::UserDoesNotExist;
+                    TaskError::UserDoesNotExist
                 }
                 domain::user::UserExistsErr::PortError(err) => {
-                    return TaskError::from(err.context("Fetching user tasks"))
+                    TaskError::from(err.context("Fetching user tasks"))
                 }
             }
         }
@@ -731,7 +731,8 @@ pub mod test_util {
 
     pub struct MockTaskService {
         pub tasks_for_user_result: FakeImplementation<i32, Result<Vec<TodoTask>, TaskError>>,
-        pub user_task_by_id_result: FakeImplementation<(i32, i32), Result<Option<TodoTask>, TaskError>>,
+        pub user_task_by_id_result:
+            FakeImplementation<(i32, i32), Result<Option<TodoTask>, TaskError>>,
         pub create_task_for_user_result: FakeImplementation<(i32, NewTask), Result<i32, TaskError>>,
         pub delete_task_result: FakeImplementation<i32, Result<(), anyhow::Error>>,
         pub update_task_result: FakeImplementation<(i32, UpdateTask), Result<(), anyhow::Error>>,
@@ -747,7 +748,7 @@ pub mod test_util {
                 update_task_result: FakeImplementation::new(),
             }
         }
-        
+
         pub fn new_locked() -> Mutex<MockTaskService> {
             Mutex::new(Self::new())
         }

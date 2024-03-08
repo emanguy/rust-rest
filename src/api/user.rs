@@ -12,7 +12,7 @@ use axum::response::{ErrorResponse, IntoResponse};
 use axum::routing::{get, post};
 use axum::Router;
 use log::{error, info};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::sync::Arc;
 use validator::Validate;
 

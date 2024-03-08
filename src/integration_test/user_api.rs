@@ -4,7 +4,10 @@ use axum::Router;
 use hyper::body;
 use tower::Service; // THIS IS REQUIRED FOR Router.call()
 
-use crate::{api, dto::{InsertedUser, NewUser}, dto};
+use crate::{
+    api, dto,
+    dto::{InsertedUser, NewUser},
+};
 
 use super::test_util;
 
@@ -29,9 +32,9 @@ async fn can_create_user() {
     let router = Router::new().nest("/users", api::user::user_routes());
     let (mut app, _) = test_util::prepare_application(router).await;
     let test_req = create_user_request();
-    
+
     let response = app.call(test_req).await.unwrap();
-    
+
     let status = response.status();
     let body = body::to_bytes(response.into_body())
         .await
@@ -50,7 +53,7 @@ async fn can_retrieve_user() {
     let router = Router::new().nest("/users", api::user::user_routes());
     let (mut app, _) = test_util::prepare_application(router).await;
     let create_user_req = create_user_request();
-    
+
     let create_response = app.call(create_user_req).await.unwrap();
     let create_status = create_response.status();
     let res_body = body::to_bytes(create_response.into_body())
@@ -62,10 +65,10 @@ async fn can_retrieve_user() {
         "Did not get expected status code, received response was {:?}",
         res_body
     );
-    
+
     let user_id = serde_json::from_slice::<InsertedUser>(&res_body)
         .unwrap_or_else(|_| panic!("Could not parse create user response, got body {res_body:?}"));
-    
+
     let list_users_req = Request::builder()
         .method(Method::GET)
         .uri("/users")
@@ -79,14 +82,14 @@ async fn can_retrieve_user() {
     let res_body = body::to_bytes(list_users_resp.into_body())
         .await
         .expect("Could not read response from list users endpoint");
-    
+
     assert_eq!(
         StatusCode::OK,
         list_users_status,
         "Got bad status code from list users endpoint, received response {:?}",
         res_body
     );
-    
+
     let received_user: Vec<dto::TodoUser> =
         serde_json::from_slice(&res_body).expect("Could not parse user list body");
     let expected_user = dto::TodoUser {
@@ -94,6 +97,6 @@ async fn can_retrieve_user() {
         first_name: String::from("John"),
         last_name: String::from("Doe"),
     };
-    
+
     assert_eq!(expected_user, received_user[0]);
 }

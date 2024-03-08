@@ -1,9 +1,6 @@
 use std::time::Duration;
 
-use thiserror::Error;
-
-use crate::{dto};
-use sqlx::{postgres::PgPoolOptions, PgExecutor, Row};
+use sqlx::postgres::PgPoolOptions;
 
 /// Connects to a PostgreSQL database with the given `db_url`, returning a connection pool for accessing it
 pub async fn connect_sqlx(db_url: &str) -> sqlx::PgPool {

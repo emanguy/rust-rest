@@ -1,10 +1,10 @@
-pub mod db_user_driven_ports;
 pub mod db_todo_driven_ports;
+pub mod db_user_driven_ports;
 
-use std::fmt::{Debug, Display};
 use crate::external_connections;
 use crate::external_connections::ConnectionHandle;
 use anyhow::{anyhow, Context};
+use std::fmt::{Debug, Display};
 
 use sqlx::pool::PoolConnection;
 use sqlx::{Acquire, PgConnection, PgPool, Postgres, Transaction};
@@ -16,9 +16,7 @@ pub struct ExternalConnectivity {
 
 impl ExternalConnectivity {
     pub fn new(db: PgPool) -> Self {
-        ExternalConnectivity {
-            db
-        }
+        ExternalConnectivity { db }
     }
 }
 
@@ -31,7 +29,6 @@ impl ConnectionHandle for PoolConnectionHandle {
         &mut self.active_connection
     }
 }
-
 
 impl external_connections::ExternalConnectivity for ExternalConnectivity {
     type Handle<'cxn_borrow> = PoolConnectionHandle;
@@ -46,9 +43,7 @@ impl external_connections::ExternalConnectivity for ExternalConnectivity {
     }
 }
 
-
-impl external_connections::Transactable for ExternalConnectivity
-{
+impl external_connections::Transactable for ExternalConnectivity {
     type Handle<'handle> = ExternalConnectionsInTransaction<'handle>;
     type Error = anyhow::Error;
 
@@ -71,10 +66,7 @@ pub struct TransactionHandle<'tx> {
     active_transaction: &'tx mut PgConnection,
 }
 
-
-impl<'tx> external_connections::ExternalConnectivity
-    for ExternalConnectionsInTransaction<'tx>
-{
+impl<'tx> external_connections::ExternalConnectivity for ExternalConnectionsInTransaction<'tx> {
     type Handle<'tx_borrow> = TransactionHandle<'tx_borrow> where Self: 'tx_borrow;
     type Error = anyhow::Error;
 
@@ -97,7 +89,6 @@ impl<'tx> ConnectionHandle for TransactionHandle<'tx> {
     }
 }
 
-
 impl<'tx> external_connections::TransactionHandle for ExternalConnectionsInTransaction<'tx> {
     type Error = anyhow::Error;
 
@@ -117,7 +108,8 @@ struct Count {
 
 impl Count {
     fn count(&self) -> i64 {
-        self.count.expect("count() should always produce at least one row")
+        self.count
+            .expect("count() should always produce at least one row")
     }
 }
 
