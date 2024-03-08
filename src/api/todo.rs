@@ -168,13 +168,44 @@ mod tests {
             
             task_service_raw.delete_task_result.set_returned_anyhow(Ok(()));
             let task_service = Mutex::new(task_service_raw);
-            
+
+            // Verify we got the expected response
             let delete_task_result = delete_task(5, &mut ext_cxn, &task_service).await;
             let Ok(status) = delete_task_result else {
                 panic!("Didn't receive expected response: {:#?}", delete_task_result);
             };
             
+            // Verify the service was called with the right params
+            let locked_service = task_service.lock().unwrap();
+            let calls = locked_service.delete_task_result.calls();
+            assert_eq!(1, calls.len());
+            assert_eq!(5, calls[0]);
+        }
+
+        #[tokio::test]
+        async fn returns_500_when_service_blows_up() {
+            let mut task_service_raw = domain::todo::test_util::MockTaskService::new();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+
+            task_service_raw.delete_task_result.set_returned_anyhow(Err(anyhow!("Whoopsie daisy!")));
+            let task_service = Mutex::new(task_service_raw);
+
+            // Verify we got the expected response
+            let delete_task_result = delete_task(5, &mut ext_cxn, &task_service).await;
+            let response = delete_task_result.into_response();
+
+            assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
+            let body_bytes_result = body::to_bytes(response.into_body()).await;
+            let Ok(body_bytes) = body_bytes_result else {
+                panic!("Could not read response body: {:#?}", body_bytes_result);
+            };
+
+            let deserialize_body_result: Result<BasicErrorResponse, _> = serde_json::from_slice(&body_bytes);
+            let Ok(deserialized_body) = deserialize_body_result else {
+                panic!("Could not parse response body: {:#?}", deserialize_body_result);
+            };
             
+            assert_eq!("internal_error", deserialized_body.error_code);
         }
     }
 }

@@ -5,6 +5,7 @@ use crate::domain;
 
 /// DTO for a constructed user
 #[derive(Serialize)]
+#[cfg_attr(test, derive(Deserialize, PartialEq, Eq, Debug))]
 pub struct TodoUser {
     pub id: i32,
     pub first_name: String,
