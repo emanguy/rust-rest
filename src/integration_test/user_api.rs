@@ -1,7 +1,6 @@
-use axum::body::Body;
+use axum::body::{self, Body};
 use axum::http::{header, Method, Request, StatusCode};
 use axum::Router;
-use hyper::body;
 use tower::Service; // THIS IS REQUIRED FOR Router.call()
 
 use crate::{
@@ -36,7 +35,7 @@ async fn can_create_user() {
     let response = app.call(test_req).await.unwrap();
 
     let status = response.status();
-    let body = body::to_bytes(response.into_body())
+    let body = body::to_bytes(response.into_body(), usize::MAX)
         .await
         .expect("Could not read response body");
     assert_eq!(
@@ -56,7 +55,7 @@ async fn can_retrieve_user() {
 
     let create_response = app.call(create_user_req).await.unwrap();
     let create_status = create_response.status();
-    let res_body = body::to_bytes(create_response.into_body())
+    let res_body = body::to_bytes(create_response.into_body(), usize::MAX)
         .await
         .expect("Could not read create user body");
     assert_eq!(
@@ -79,7 +78,7 @@ async fn can_retrieve_user() {
         .await
         .expect("User lookup request failed");
     let list_users_status = list_users_resp.status();
-    let res_body = body::to_bytes(list_users_resp.into_body())
+    let res_body = body::to_bytes(list_users_resp.into_body(), usize::MAX)
         .await
         .expect("Could not read response from list users endpoint");
 

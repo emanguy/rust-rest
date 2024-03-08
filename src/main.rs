@@ -6,6 +6,7 @@ use axum::extract::State;
 use axum::Router;
 use dotenv::dotenv;
 use log::*;
+use tokio::net::TcpListener;
 
 mod api;
 mod app_env;
@@ -54,8 +55,11 @@ async fn main() {
         .with_state(Arc::new(SharedData { ext_cxn }));
 
     info!("Starting server.");
-    axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
-        .serve(router.into_make_service())
+    let network_listener = match TcpListener::bind(&"0.0.0.0:8080").await {
+        Ok(listener) => listener,
+        Err(bind_err) => panic!("Could not listen on requested port! {}", bind_err),
+    };
+    axum::serve(network_listener, router.into_make_service())
         .await
         .unwrap();
 }

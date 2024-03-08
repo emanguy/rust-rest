@@ -94,7 +94,7 @@ mod tests {
     use crate::routing_utils::BasicErrorResponse;
     use crate::{domain, external_connections};
     use anyhow::anyhow;
-    use hyper::body;
+    use axum::body;
     use speculoos::prelude::*;
     use std::sync::Mutex;
 
@@ -153,7 +153,7 @@ mod tests {
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, real_response.status());
 
-            let body_bytes_result = body::to_bytes(real_response.into_body()).await;
+            let body_bytes_result = body::to_bytes(real_response.into_body(), usize::MAX).await;
             let Ok(body_bytes) = body_bytes_result else {
                 panic!("Could not extract body: {:#?}", body_bytes_result);
             };
@@ -183,7 +183,7 @@ mod tests {
 
             assert_eq!(StatusCode::BAD_REQUEST, real_response.status());
 
-            let body_bytes_result = body::to_bytes(real_response.into_body()).await;
+            let body_bytes_result = body::to_bytes(real_response.into_body(), usize::MAX).await;
             let Ok(body_bytes) = body_bytes_result else {
                 panic!(
                     "Could not extract HTTP body bytes: {:#?}",
@@ -243,7 +243,7 @@ mod tests {
             let response = delete_task_result.into_response();
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
-            let body_bytes_result = body::to_bytes(response.into_body()).await;
+            let body_bytes_result = body::to_bytes(response.into_body(), usize::MAX).await;
             let Ok(body_bytes) = body_bytes_result else {
                 panic!("Could not read response body: {:#?}", body_bytes_result);
             };
