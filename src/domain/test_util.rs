@@ -38,6 +38,7 @@ impl<Args, Ret> FakeImplementation<Args, Ret> {
     }
 }
 
+#[allow(dead_code)]
 impl<Args, Ret> FakeImplementation<Args, Ret>
 where
     Ret: Clone,

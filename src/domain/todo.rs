@@ -477,7 +477,7 @@ mod tests {
 
         #[tokio::test]
         async fn returns_port_err() {
-            let mut writer = InMemoryUserTaskPersistence::new_locked();
+            let writer = InMemoryUserTaskPersistence::new_locked();
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
             {
                 let mut locked_writer = writer.write().expect("writer rw lock poisoned");

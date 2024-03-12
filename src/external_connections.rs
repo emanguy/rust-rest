@@ -166,6 +166,7 @@ pub mod test_util {
             }
         }
 
+        #[allow(dead_code)]
         pub fn is_transacting(&self) -> bool {
             self.is_transacting
         }

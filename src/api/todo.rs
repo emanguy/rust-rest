@@ -221,6 +221,8 @@ mod tests {
                 );
             };
 
+            assert_eq!(StatusCode::OK, status);
+
             // Verify the service was called with the right params
             let locked_service = task_service.lock().unwrap();
             let calls = locked_service.delete_task_result.calls();

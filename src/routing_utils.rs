@@ -72,6 +72,7 @@ impl From<ValidationErrors> for ValidationErrorResponse {
 /// data structure for API errors
 #[derive(FromRequest)]
 #[from_request(via(axum::Json), rejection(JsonErrorResponse))]
+#[cfg_attr(test, derive(Debug))]
 pub struct Json<T>(pub T);
 
 impl<T: Serialize> IntoResponse for Json<T> {

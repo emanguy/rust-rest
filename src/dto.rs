@@ -34,6 +34,7 @@ pub struct NewUser {
 
 /// DTO containing the ID of a user that was created via the API.
 #[derive(Deserialize, Serialize)]
+#[cfg_attr(test, derive(Debug))]
 pub struct InsertedUser {
     pub id: i32,
 }
