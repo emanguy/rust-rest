@@ -61,7 +61,9 @@ jobs:
       - checkout
       - rust/clippy:
           flags: --tests --features integration_test -- -D warnings
-      - rust/format
+      - run:
+          name: "Validate formatting"
+          command: cargo fmt --check
 
 workflows:
   standard:
