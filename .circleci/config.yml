@@ -48,13 +48,13 @@ jobs:
             done
             echo "Migrations complete!"
       - rust_build
-      - run: 
+      - run:
           name: "Run tests"
           command: cargo test --features integration_test
 
   validate-quality:
     docker:
-      - image: rust:1.75
+      - image: ghcr.io/emanguy/rust-ci:1.75-v1.0.0
     environment:
       SQLX_OFFLINE: "true"
     steps:
