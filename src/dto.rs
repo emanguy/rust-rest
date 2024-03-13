@@ -1,7 +1,7 @@
 use crate::domain;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
+use validator::{Validate, ValidationErrors};
 
 /// DTO for a constructed user
 #[derive(Serialize)]
@@ -85,26 +85,48 @@ impl From<UpdateTask> for domain::todo::UpdateTask {
     }
 }
 
+#[derive(Serialize)]
+pub struct InsertedTask {
+    pub id: i32,
+}
+
+/// Contains diagnostic information about an API failure
+#[derive(Serialize, Debug)]
+#[cfg_attr(test, derive(Deserialize))]
+pub struct BasicError {
+    pub error_code: String,
+    pub error_description: String,
+
+    #[serde(skip_deserializing)]
+    pub extra_info: Option<ExtraInfo>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(untagged)]
+pub enum ExtraInfo {
+    ValidationIssues(ValidationErrors),
+    Message(String),
+}
+
 #[cfg(test)]
 mod dto_tests {
     use super::*;
 
-    #[test]
-    fn bad_user_data_gets_rejected() {
-        let bad_user = NewUser {
-            first_name: (0..35).map(|_| "A").collect(),
-            last_name: (0..55).map(|_| "B").collect(),
-        };
-        let validation_result = bad_user.validate();
-        assert!(validation_result.is_err());
-        let validation_errors = validation_result.unwrap_err();
-        let field_validations = validation_errors.field_errors();
-        assert!(field_validations.contains_key("first_name"));
-        assert!(field_validations.contains_key("last_name"));
-    }
-}
+    mod new_user {
+        use super::*;
 
-#[derive(Serialize)]
-pub struct InsertedTask {
-    pub id: i32,
+        #[test]
+        fn bad_user_data_gets_rejected() {
+            let bad_user = NewUser {
+                first_name: (0..35).map(|_| "A").collect(),
+                last_name: (0..55).map(|_| "B").collect(),
+            };
+            let validation_result = bad_user.validate();
+            assert!(validation_result.is_err());
+            let validation_errors = validation_result.unwrap_err();
+            let field_validations = validation_errors.field_errors();
+            assert!(field_validations.contains_key("first_name"));
+            assert!(field_validations.contains_key("last_name"));
+        }
+    }
 }

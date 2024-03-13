@@ -1,4 +1,3 @@
-use crate::dto::UpdateTask;
 use crate::external_connections::ExternalConnectivity;
 use crate::routing_utils::{GenericErrorResponse, Json, ValidationErrorResponse};
 use crate::{domain, dto, persistence, AppState, SharedData};
@@ -19,7 +18,7 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
             patch(
                 |State(app_state): AppState,
                  Path(task_id): Path<i32>,
-                 Json(update): Json<UpdateTask>| async move {
+                 Json(update): Json<dto::UpdateTask>| async move {
                     let mut ext_cxn = app_state.ext_cxn.clone();
                     let task_service = domain::todo::TaskService {};
 
@@ -91,8 +90,7 @@ async fn delete_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::routing_utils::BasicErrorResponse;
-    use crate::{domain, external_connections};
+    use crate::{domain, dto, external_connections};
     use anyhow::anyhow;
     use speculoos::prelude::*;
     use std::sync::Mutex;
@@ -113,7 +111,7 @@ mod tests {
 
             let update_task_response = update_task(
                 2,
-                UpdateTask {
+                dto::UpdateTask {
                     description: "Something to do".to_owned(),
                 },
                 &mut ext_cxn,
@@ -142,7 +140,7 @@ mod tests {
 
             let update_task_response = update_task(
                 2,
-                UpdateTask {
+                dto::UpdateTask {
                     description: "Something to do".to_owned(),
                 },
                 &mut ext_cxn,
@@ -153,7 +151,7 @@ mod tests {
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, real_response.status());
 
-            let deserialized_body: BasicErrorResponse =
+            let deserialized_body: dto::BasicError =
                 deserialize_body(real_response.into_body()).await;
             assert_eq!("internal_error", deserialized_body.error_code);
         }
@@ -165,7 +163,7 @@ mod tests {
 
             let update_task_response = update_task(
                 5,
-                UpdateTask {
+                dto::UpdateTask {
                     description: String::new(),
                 },
                 &mut ext_cxn,
@@ -176,7 +174,7 @@ mod tests {
 
             assert_eq!(StatusCode::BAD_REQUEST, real_response.status());
 
-            let deserialized_body: BasicErrorResponse =
+            let deserialized_body: dto::BasicError =
                 deserialize_body(real_response.into_body()).await;
             assert_eq!("invalid_input", deserialized_body.error_code);
         }
@@ -225,8 +223,7 @@ mod tests {
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
 
-            let deserialized_body: BasicErrorResponse =
-                deserialize_body(response.into_body()).await;
+            let deserialized_body: dto::BasicError = deserialize_body(response.into_body()).await;
             assert_eq!("internal_error", deserialized_body.error_code);
         }
     }

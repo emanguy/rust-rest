@@ -5,37 +5,17 @@ use axum_macros::FromRequest;
 
 use serde::Serialize;
 
-#[cfg(test)]
-use serde::Deserialize;
-
+use crate::dto::{BasicError, ExtraInfo};
 use validator::ValidationErrors;
 
-/// Contains diagnostic information about an API failure
-#[derive(Serialize, Debug)]
-#[cfg_attr(test, derive(Deserialize))]
-pub struct BasicErrorResponse {
-    pub error_code: String,
-    pub error_description: String,
-
-    #[serde(skip_deserializing)]
-    pub extra_info: Option<ExtraInfo>,
-}
-
-#[derive(Serialize, Debug)]
-#[serde(untagged)]
-pub enum ExtraInfo {
-    ValidationIssues(ValidationErrors),
-    Message(String),
-}
-
-/// Represents a generic 500 internal server error which turns into a [BasicErrorResponse]
+/// Represents a generic 500 internal server error which turns into a [BasicError]
 pub struct GenericErrorResponse(pub anyhow::Error);
 
 impl IntoResponse for GenericErrorResponse {
     fn into_response(self) -> Response {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(BasicErrorResponse {
+            Json(BasicError {
                 error_code: "internal_error".to_owned(),
                 error_description: format!("An unexpected error occurred: {}", self.0),
                 extra_info: None,
@@ -45,14 +25,14 @@ impl IntoResponse for GenericErrorResponse {
     }
 }
 
-/// Response type that wraps validation errors and turns them into [BasicErrorResponse]s
+/// Response type that wraps validation errors and turns them into [BasicError]s
 pub struct ValidationErrorResponse(ValidationErrors);
 
 impl IntoResponse for ValidationErrorResponse {
     fn into_response(self) -> Response {
         (
             StatusCode::BAD_REQUEST,
-            Json(BasicErrorResponse {
+            Json(BasicError {
                 error_code: "invalid_input".into(),
                 error_description: "Submitted data was invalid.".to_owned(),
                 extra_info: Some(ExtraInfo::ValidationIssues(self.0)),
@@ -98,7 +78,7 @@ impl IntoResponse for JsonErrorResponse {
     fn into_response(self) -> Response {
         (
             StatusCode::BAD_REQUEST,
-            axum::Json(BasicErrorResponse {
+            axum::Json(BasicError {
                 error_code: "invalid_json".into(),
                 error_description:
                     "The passed request body contained malformed or unreadable JSON.".into(),

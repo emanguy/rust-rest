@@ -1,10 +1,7 @@
 use crate::domain::todo::driving_ports::TaskError;
 use crate::domain::user::driving_ports::CreateUserError;
-use crate::dto::InsertedTask;
 use crate::external_connections::ExternalConnectivity;
-use crate::routing_utils::{
-    BasicErrorResponse, GenericErrorResponse, Json, ValidationErrorResponse,
-};
+use crate::routing_utils::{GenericErrorResponse, Json, ValidationErrorResponse};
 use crate::{domain, dto, persistence, AppState, SharedData};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -124,7 +121,7 @@ async fn create_user(
             Err(CreateUserError::UserAlreadyExists) => {
                 return Err((
                     StatusCode::CONFLICT,
-                    Json(BasicErrorResponse {
+                    Json(dto::BasicError {
                         error_code: "user_exists".to_owned(),
                         error_description:
                             "A user already exists in the system with the given information."
@@ -145,7 +142,7 @@ fn handle_todo_task_err(err: TaskError) -> ErrorResponse {
     match err {
         TaskError::UserDoesNotExist => (
             StatusCode::NOT_FOUND,
-            Json(BasicErrorResponse {
+            Json(dto::BasicError {
                 error_code: "no_matching_user".to_owned(),
                 error_description: "Could not find a user matching the given information."
                     .to_owned(),
@@ -214,7 +211,7 @@ async fn get_task_for_user(
         Ok(None) => {
             return Err((
                 StatusCode::NOT_FOUND,
-                Json(BasicErrorResponse {
+                Json(dto::BasicError {
                     error_code: "no_matching_task".to_owned(),
                     error_description: "The specified task does not exist.".to_owned(),
                     extra_info: None,
@@ -234,7 +231,7 @@ async fn add_task_for_user(
     new_task: dto::NewTask,
     ext_cxn: &mut impl ExternalConnectivity,
     task_service: &impl domain::todo::driving_ports::TaskPort,
-) -> Result<(StatusCode, Json<InsertedTask>), ErrorResponse> {
+) -> Result<(StatusCode, Json<dto::InsertedTask>), ErrorResponse> {
     info!("Adding task for user {user_id}");
     new_task.validate().map_err(ValidationErrorResponse::from)?;
 
@@ -256,7 +253,10 @@ async fn add_task_for_user(
         Err(domain_error) => return Err(handle_todo_task_err(domain_error)),
     };
 
-    Ok((StatusCode::CREATED, Json(InsertedTask { id: new_task_id })))
+    Ok((
+        StatusCode::CREATED,
+        Json(dto::InsertedTask { id: new_task_id }),
+    ))
 }
 
 #[cfg(test)]
@@ -330,7 +330,7 @@ mod tests {
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, req_parts.status);
 
             // Extract raw bytes from HTTP body
-            let deserialized_body: BasicErrorResponse = deserialize_body(response_body).await;
+            let deserialized_body: dto::BasicError = deserialize_body(response_body).await;
             // Verify error code is correct
             assert_eq!("internal_error", deserialized_body.error_code);
         }
@@ -384,7 +384,7 @@ mod tests {
 
             assert_eq!(StatusCode::CONFLICT, resp_parts.status);
 
-            let deserialized_body: BasicErrorResponse = deserialize_body(resp_body).await;
+            let deserialized_body: dto::BasicError = deserialize_body(resp_body).await;
             assert_eq!("user_exists", deserialized_body.error_code);
         }
 
@@ -407,7 +407,7 @@ mod tests {
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, resp_parts.status);
 
-            let deserialized_body: BasicErrorResponse = deserialize_body(resp_body).await;
+            let deserialized_body: dto::BasicError = deserialize_body(resp_body).await;
             assert_eq!("internal_error", deserialized_body.error_code);
         }
     }
@@ -423,7 +423,7 @@ mod tests {
 
             assert_eq!(StatusCode::NOT_FOUND, res_parts.status);
 
-            let deserialized_body: BasicErrorResponse = deserialize_body(res_body).await;
+            let deserialized_body: dto::BasicError = deserialize_body(res_body).await;
             assert_eq!("no_matching_user", deserialized_body.error_code);
         }
 
@@ -437,7 +437,7 @@ mod tests {
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, res_parts.status);
 
-            let deserialized_body: BasicErrorResponse = deserialize_body(res_body).await;
+            let deserialized_body: dto::BasicError = deserialize_body(res_body).await;
             assert_eq!("internal_error", deserialized_body.error_code);
         }
     }
@@ -498,7 +498,7 @@ mod tests {
 
             assert_eq!(StatusCode::NOT_FOUND, parts.status);
 
-            let body: BasicErrorResponse = deserialize_body(body).await;
+            let body: dto::BasicError = deserialize_body(body).await;
             assert_eq!("no_matching_user", body.error_code);
         }
     }
@@ -556,7 +556,7 @@ mod tests {
 
             assert_eq!(StatusCode::NOT_FOUND, parts.status);
 
-            let deserialized_body: BasicErrorResponse = deserialize_body(body).await;
+            let deserialized_body: dto::BasicError = deserialize_body(body).await;
             assert_eq!("no_matching_user", deserialized_body.error_code);
         }
 
@@ -575,7 +575,7 @@ mod tests {
 
             assert_eq!(StatusCode::NOT_FOUND, parts.status);
 
-            let deserialized_body: BasicErrorResponse = deserialize_body(body).await;
+            let deserialized_body: dto::BasicError = deserialize_body(body).await;
             assert_eq!("no_matching_task", deserialized_body.error_code);
         }
     }
@@ -621,7 +621,7 @@ mod tests {
 
             assert_eq!(StatusCode::NOT_FOUND, parts.status);
 
-            let deserialized_body: BasicErrorResponse = deserialize_body(body).await;
+            let deserialized_body: dto::BasicError = deserialize_body(body).await;
             assert_eq!("no_matching_user", deserialized_body.error_code);
         }
     }
