@@ -34,13 +34,13 @@ async fn can_create_user() {
 
     let response = app.call(test_req).await.unwrap();
 
-    let status = response.status();
-    let body = body::to_bytes(response.into_body(), usize::MAX)
+    let (parts, body) = response.into_parts();
+    let body = body::to_bytes(body, usize::MAX)
         .await
         .expect("Could not read response body");
     assert_eq!(
         StatusCode::CREATED,
-        status,
+        parts.status,
         "Failed to create with response body {:?}",
         body
     );
@@ -54,13 +54,13 @@ async fn can_retrieve_user() {
     let create_user_req = create_user_request();
 
     let create_response = app.call(create_user_req).await.unwrap();
-    let create_status = create_response.status();
-    let res_body = body::to_bytes(create_response.into_body(), usize::MAX)
+    let (create_parts, body) = create_response.into_parts();
+    let res_body = body::to_bytes(body, usize::MAX)
         .await
         .expect("Could not read create user body");
     assert_eq!(
         StatusCode::CREATED,
-        create_status,
+        create_parts.status,
         "Did not get expected status code, received response was {:?}",
         res_body
     );
@@ -77,14 +77,14 @@ async fn can_retrieve_user() {
         .call(list_users_req)
         .await
         .expect("User lookup request failed");
-    let list_users_status = list_users_resp.status();
-    let res_body = body::to_bytes(list_users_resp.into_body(), usize::MAX)
+    let (list_users_parts, lu_body) = list_users_resp.into_parts();
+    let res_body = body::to_bytes(lu_body, usize::MAX)
         .await
         .expect("Could not read response from list users endpoint");
 
     assert_eq!(
         StatusCode::OK,
-        list_users_status,
+        list_users_parts.status,
         "Got bad status code from list users endpoint, received response {:?}",
         res_body
     );

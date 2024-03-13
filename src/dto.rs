@@ -57,8 +57,8 @@ impl From<NewTask> for domain::todo::NewTask {
 /// DTO for a returned task on the API
 #[derive(Serialize)]
 pub struct TodoTask {
-    id: i32,
-    description: String,
+    pub id: i32,
+    pub description: String,
 }
 
 impl From<domain::todo::TodoTask> for TodoTask {

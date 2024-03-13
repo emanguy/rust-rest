@@ -526,6 +526,13 @@ pub mod test_util {
             }
         }
 
+        pub fn build_locked(builder: impl FnOnce(&mut Self)) -> Mutex<Self> {
+            let mut new_svc = Self::new();
+            builder(&mut new_svc);
+
+            Mutex::new(new_svc)
+        }
+
         #[allow(dead_code)]
         pub fn new_locked() -> Mutex<MockUserService> {
             Mutex::new(Self::new())

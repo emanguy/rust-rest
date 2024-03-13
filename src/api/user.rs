@@ -8,7 +8,7 @@ use crate::routing_utils::{
 use crate::{domain, dto, persistence, AppState, SharedData};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::{ErrorResponse, IntoResponse};
+use axum::response::ErrorResponse;
 use axum::routing::get;
 use axum::Router;
 use log::{error, info};
@@ -152,7 +152,6 @@ fn handle_todo_task_err(err: TaskError) -> ErrorResponse {
                 extra_info: None,
             }),
         )
-            .into_response()
             .into(),
 
         TaskError::PortError(err) => {
@@ -263,24 +262,21 @@ async fn add_task_for_user(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::test_util::deserialize_body;
     use crate::api::user::get_users;
     use crate::{domain, external_connections};
     use anyhow::anyhow;
+    use axum::response::IntoResponse;
     use speculoos::prelude::*;
-    use std::sync::Mutex;
 
     mod get_users {
         use super::*;
-        use axum::body;
 
         #[tokio::test]
         async fn happy_path() {
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-            let mut raw_user_port = domain::user::test_util::MockUserService::new();
-
-            raw_user_port
-                .get_users_response
-                .set_returned_anyhow(Ok(vec![
+            let user_port = domain::user::test_util::MockUserService::build_locked(|svc| {
+                svc.get_users_response.set_returned_anyhow(Ok(vec![
                     domain::user::TodoUser {
                         id: 1,
                         first_name: "John".to_owned(),
@@ -292,7 +288,7 @@ mod tests {
                         last_name: "Doe".to_owned(),
                     },
                 ]));
-            let user_port = Mutex::new(raw_user_port);
+            });
 
             let endpoint_result = get_users(&mut ext_cxn, &user_port).await;
             assert_that!(endpoint_result)
@@ -320,41 +316,21 @@ mod tests {
         #[tokio::test]
         async fn returns_500_when_service_blows_up() {
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-            let mut user_service_raw = domain::user::test_util::MockUserService::new();
-
-            // Configure what the service will return
-            user_service_raw
-                .get_users_response
-                .set_returned_anyhow(Err(anyhow!("Whoopsy daisy")));
-            let user_service = Mutex::new(user_service_raw);
+            let user_service = domain::user::test_util::MockUserService::build_locked(|svc| {
+                // Configure what the service will return
+                svc.get_users_response
+                    .set_returned_anyhow(Err(anyhow!("Whoopsy daisy")));
+            });
 
             // Execute endpoint, get response
             let response_result = get_users(&mut ext_cxn, &user_service).await;
-            let response = response_result.into_response();
-            let (req_parts, response_body) = response.into_parts();
+            let (req_parts, response_body) = response_result.into_response().into_parts();
 
             // Verify status code
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, req_parts.status);
 
             // Extract raw bytes from HTTP body
-            let bytes_result = body::to_bytes(response_body, usize::MAX).await;
-            let Ok(body_bytes) = bytes_result else {
-                panic!(
-                    "Failed to read response body: {}",
-                    bytes_result.unwrap_err()
-                );
-            };
-
-            // Deserialize the body from JSON into a data structure
-            let deserialize_result: Result<BasicErrorResponse, _> =
-                serde_json::from_slice(&body_bytes);
-            let Ok(deserialized_body) = deserialize_result else {
-                panic!(
-                    "Could not deserialize response body: {}",
-                    deserialize_result.unwrap_err()
-                );
-            };
-
+            let deserialized_body: BasicErrorResponse = deserialize_body(response_body).await;
             // Verify error code is correct
             assert_eq!("internal_error", deserialized_body.error_code);
         }
@@ -362,7 +338,6 @@ mod tests {
 
     mod create_user {
         use super::*;
-        use axum::body;
 
         fn create_user_payload() -> dto::NewUser {
             dto::NewUser {
@@ -376,12 +351,9 @@ mod tests {
             let user = create_user_payload();
 
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-            let mut user_service_raw = domain::user::test_util::MockUserService::new();
-
-            user_service_raw
-                .create_user_response
-                .set_returned_result(Ok(10));
-            let user_service = Mutex::new(user_service_raw);
+            let user_service = domain::user::test_util::MockUserService::build_locked(|svc| {
+                svc.create_user_response.set_returned_result(Ok(10));
+            });
 
             let create_user_result = create_user(user, &mut ext_cxn, &user_service).await;
             let Ok((status, Json(inserted_user))) = create_user_result else {
@@ -400,12 +372,10 @@ mod tests {
             let user = create_user_payload();
 
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-            let mut user_service_raw = domain::user::test_util::MockUserService::new();
-
-            user_service_raw
-                .create_user_response
-                .set_returned_result(Err(CreateUserError::UserAlreadyExists));
-            let user_service = Mutex::new(user_service_raw);
+            let user_service = domain::user::test_util::MockUserService::build_locked(|svc| {
+                svc.create_user_response
+                    .set_returned_result(Err(CreateUserError::UserAlreadyExists));
+            });
 
             let response = create_user(user, &mut ext_cxn, &user_service)
                 .await
@@ -414,23 +384,7 @@ mod tests {
 
             assert_eq!(StatusCode::CONFLICT, resp_parts.status);
 
-            let body_bytes_result = body::to_bytes(resp_body, usize::MAX).await;
-            let Ok(body_bytes) = body_bytes_result else {
-                panic!(
-                    "Could not read response body: {}",
-                    body_bytes_result.unwrap_err()
-                );
-            };
-
-            let deserialize_result: Result<BasicErrorResponse, _> =
-                serde_json::from_slice(&body_bytes);
-            let Ok(deserialized_body) = deserialize_result else {
-                panic!(
-                    "Could not deserialize response: {}",
-                    deserialize_result.unwrap_err()
-                );
-            };
-
+            let deserialized_body: BasicErrorResponse = deserialize_body(resp_body).await;
             assert_eq!("user_exists", deserialized_body.error_code);
         }
 
@@ -439,12 +393,12 @@ mod tests {
             let payload = create_user_payload();
 
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-            let mut user_service_raw = domain::user::test_util::MockUserService::new();
-
-            user_service_raw
-                .create_user_response
-                .set_returned_result(Err(CreateUserError::PortError(anyhow!("Whoopsie daisy"))));
-            let user_service = Mutex::new(user_service_raw);
+            let user_service = domain::user::test_util::MockUserService::build_locked(|svc| {
+                svc.create_user_response
+                    .set_returned_result(Err(CreateUserError::PortError(anyhow!(
+                        "Whoopsie daisy"
+                    ))));
+            });
 
             let response = create_user(payload, &mut ext_cxn, &user_service)
                 .await
@@ -453,37 +407,177 @@ mod tests {
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, resp_parts.status);
 
-            let body_bytes_result = body::to_bytes(resp_body, usize::MAX).await;
-            let Ok(body_bytes) = body_bytes_result else {
-                panic!(
-                    "Could not read bytes of response body: {}",
-                    body_bytes_result.unwrap_err()
-                );
-            };
-
-            let deserialize_result: Result<BasicErrorResponse, _> =
-                serde_json::from_slice(&body_bytes);
-            let Ok(deserialized_body) = deserialize_result else {
-                panic!(
-                    "Could not deserialize response body: {}",
-                    deserialize_result.unwrap_err()
-                );
-            };
-
+            let deserialized_body: BasicErrorResponse = deserialize_body(resp_body).await;
             assert_eq!("internal_error", deserialized_body.error_code);
         }
     }
 
     mod handle_todo_task_err {
-        // TODO
+        use super::*;
+
+        #[tokio::test]
+        async fn converts_missing_user_to_not_found() {
+            let produced_response =
+                Err::<(), _>(handle_todo_task_err(TaskError::UserDoesNotExist)).into_response();
+            let (res_parts, res_body) = produced_response.into_parts();
+
+            assert_eq!(StatusCode::NOT_FOUND, res_parts.status);
+
+            let deserialized_body: BasicErrorResponse = deserialize_body(res_body).await;
+            assert_eq!("no_matching_user", deserialized_body.error_code);
+        }
+
+        #[tokio::test]
+        async fn converts_port_error_to_500() {
+            let produced_response = Err::<(), _>(handle_todo_task_err(TaskError::PortError(
+                anyhow!("Whoopsie daisy"),
+            )))
+            .into_response();
+            let (res_parts, res_body) = produced_response.into_parts();
+
+            assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, res_parts.status);
+
+            let deserialized_body: BasicErrorResponse = deserialize_body(res_body).await;
+            assert_eq!("internal_error", deserialized_body.error_code);
+        }
     }
 
     mod get_tasks_for_user {
-        // TODO
+        use super::*;
+
+        #[tokio::test]
+        async fn happy_path() {
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.tasks_for_user_result.set_returned_result(Ok(vec![
+                    domain::todo::TodoTask {
+                        id: 3,
+                        owner_user_id: 2,
+                        item_desc: "Something to do".to_owned(),
+                    },
+                    domain::todo::TodoTask {
+                        id: 10,
+                        owner_user_id: 2,
+                        item_desc: "Another thing to do".to_owned(),
+                    },
+                ]));
+            });
+
+            let Json(tasks) = get_tasks_for_user(2, &mut ext_cxn, &task_service)
+                .await
+                .unwrap_or_else(|err| {
+                    panic!("Didn't get the expected response! Error: {:#?}", err);
+                });
+
+            assert!(matches!(tasks.as_slice(), [
+                dto::TodoTask{
+                    id: 3,
+                    description: d1,
+                },
+                dto::TodoTask {
+                    id: 10,
+                    description: d2,
+                }
+            ] if d1 == "Something to do" &&
+                 d2 == "Another thing to do"
+            ))
+        }
+
+        #[tokio::test]
+        async fn returns_404_on_user_not_found() {
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.tasks_for_user_result
+                    .set_returned_result(Err(TaskError::UserDoesNotExist));
+            });
+
+            let response = get_tasks_for_user(2, &mut ext_cxn, &task_service)
+                .await
+                .into_response();
+            let (parts, body) = response.into_parts();
+
+            assert_eq!(StatusCode::NOT_FOUND, parts.status);
+
+            let body: BasicErrorResponse = deserialize_body(body).await;
+            assert_eq!("no_matching_user", body.error_code);
+        }
     }
 
     mod get_task_for_user {
-        // TODO
+        use super::*;
+
+        fn path_variables() -> GetTaskPath {
+            GetTaskPath {
+                user_id: 2,
+                task_id: 10,
+            }
+        }
+
+        #[tokio::test]
+        async fn happy_path() {
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            let path_vars = path_variables();
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.user_task_by_id_result
+                    .set_returned_result(Ok(Some(domain::todo::TodoTask {
+                        id: path_vars.task_id,
+                        owner_user_id: path_vars.user_id,
+                        item_desc: "Something to do".to_owned(),
+                    })));
+            });
+
+            let Json(task) = get_task_for_user(path_vars, &mut ext_cxn, &task_service)
+                .await
+                .unwrap_or_else(|err| {
+                    panic!("Didn't get expected response, instead got this: {:#?}", err);
+                });
+
+            assert!(matches!(task,
+                dto::TodoTask {
+                    id: 10,
+                    description
+                } if description == "Something to do",
+            ));
+        }
+
+        #[tokio::test]
+        async fn gives_appropriate_404_on_no_user() {
+            let path_vars = path_variables();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.user_task_by_id_result
+                    .set_returned_result(Err(TaskError::UserDoesNotExist));
+            });
+
+            let response = get_task_for_user(path_vars, &mut ext_cxn, &task_service)
+                .await
+                .into_response();
+            let (parts, body) = response.into_parts();
+
+            assert_eq!(StatusCode::NOT_FOUND, parts.status);
+
+            let deserialized_body: BasicErrorResponse = deserialize_body(body).await;
+            assert_eq!("no_matching_user", deserialized_body.error_code);
+        }
+
+        #[tokio::test]
+        async fn gives_appropriate_404_on_no_task() {
+            let path_vars = path_variables();
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.user_task_by_id_result.set_returned_result(Ok(None));
+            });
+
+            let response = get_task_for_user(path_vars, &mut ext_cxn, &task_service)
+                .await
+                .into_response();
+            let (parts, body) = response.into_parts();
+
+            assert_eq!(StatusCode::NOT_FOUND, parts.status);
+
+            let deserialized_body: BasicErrorResponse = deserialize_body(body).await;
+            assert_eq!("no_matching_task", deserialized_body.error_code);
+        }
     }
 
     mod add_task_for_user {

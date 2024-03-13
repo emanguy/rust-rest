@@ -94,12 +94,12 @@ mod tests {
     use crate::routing_utils::BasicErrorResponse;
     use crate::{domain, external_connections};
     use anyhow::anyhow;
-    use axum::body;
     use speculoos::prelude::*;
     use std::sync::Mutex;
 
     mod update_task {
         use super::*;
+        use crate::api::test_util::deserialize_body;
 
         #[tokio::test]
         async fn happy_path() {
@@ -153,16 +153,9 @@ mod tests {
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, real_response.status());
 
-            let body_bytes_result = body::to_bytes(real_response.into_body(), usize::MAX).await;
-            let Ok(body_bytes) = body_bytes_result else {
-                panic!("Could not extract body: {:#?}", body_bytes_result);
-            };
-
-            let deserialized_body_result: Result<BasicErrorResponse, _> =
-                serde_json::from_slice(&body_bytes);
-            assert_that!(deserialized_body_result)
-                .is_ok()
-                .matches(|body| body.error_code == "internal_error");
+            let deserialized_body: BasicErrorResponse =
+                deserialize_body(real_response.into_body()).await;
+            assert_eq!("internal_error", deserialized_body.error_code);
         }
 
         #[tokio::test]
@@ -183,34 +176,22 @@ mod tests {
 
             assert_eq!(StatusCode::BAD_REQUEST, real_response.status());
 
-            let body_bytes_result = body::to_bytes(real_response.into_body(), usize::MAX).await;
-            let Ok(body_bytes) = body_bytes_result else {
-                panic!(
-                    "Could not extract HTTP body bytes: {:#?}",
-                    body_bytes_result
-                );
-            };
-
-            let deserialized_body_result: Result<BasicErrorResponse, _> =
-                serde_json::from_slice(&body_bytes);
-            assert_that!(deserialized_body_result)
-                .is_ok()
-                .matches(|response_body| response_body.error_code == "invalid_input");
+            let deserialized_body: BasicErrorResponse =
+                deserialize_body(real_response.into_body()).await;
+            assert_eq!("invalid_input", deserialized_body.error_code);
         }
     }
 
     mod delete_task {
         use super::*;
+        use crate::api::test_util::deserialize_body;
 
         #[tokio::test]
         async fn happy_path() {
-            let mut task_service_raw = domain::todo::test_util::MockTaskService::new();
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-
-            task_service_raw
-                .delete_task_result
-                .set_returned_anyhow(Ok(()));
-            let task_service = Mutex::new(task_service_raw);
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.delete_task_result.set_returned_anyhow(Ok(()));
+            });
 
             // Verify we got the expected response
             let delete_task_result = delete_task(5, &mut ext_cxn, &task_service).await;
@@ -232,33 +213,20 @@ mod tests {
 
         #[tokio::test]
         async fn returns_500_when_service_blows_up() {
-            let mut task_service_raw = domain::todo::test_util::MockTaskService::new();
             let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
-
-            task_service_raw
-                .delete_task_result
-                .set_returned_anyhow(Err(anyhow!("Whoopsie daisy!")));
-            let task_service = Mutex::new(task_service_raw);
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.delete_task_result
+                    .set_returned_anyhow(Err(anyhow!("Whoopsie daisy!")));
+            });
 
             // Verify we got the expected response
             let delete_task_result = delete_task(5, &mut ext_cxn, &task_service).await;
             let response = delete_task_result.into_response();
 
             assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, response.status());
-            let body_bytes_result = body::to_bytes(response.into_body(), usize::MAX).await;
-            let Ok(body_bytes) = body_bytes_result else {
-                panic!("Could not read response body: {:#?}", body_bytes_result);
-            };
 
-            let deserialize_body_result: Result<BasicErrorResponse, _> =
-                serde_json::from_slice(&body_bytes);
-            let Ok(deserialized_body) = deserialize_body_result else {
-                panic!(
-                    "Could not parse response body: {:#?}",
-                    deserialize_body_result
-                );
-            };
-
+            let deserialized_body: BasicErrorResponse =
+                deserialize_body(response.into_body()).await;
             assert_eq!("internal_error", deserialized_body.error_code);
         }
     }
