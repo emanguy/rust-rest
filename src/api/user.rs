@@ -11,7 +11,12 @@ use axum::Router;
 use log::{error, info};
 use serde::Deserialize;
 use std::sync::Arc;
+use utoipa::OpenApi;
 use validator::Validate;
+
+#[derive(OpenApi)]
+#[openapi(paths(get_users,))]
+pub struct UsersApi;
 
 /// Builds a router for all the user routes
 pub fn user_routes() -> Router<Arc<SharedData>> {
@@ -69,6 +74,15 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
 }
 
 /// Retrieves a list of all the users in the system.
+#[utoipa::path(
+    get,
+    path = "/users",
+    responses(
+        (status = 200, description = "A list of users in the system", body = Vec<TodoUser>),
+        (status = 500, response = dto::BasicError)
+    ),
+    tag = "Users"
+)]
 async fn get_users(
     ext_cxn: &mut impl ExternalConnectivity,
     user_service: &impl domain::user::driving_ports::UserPort,
