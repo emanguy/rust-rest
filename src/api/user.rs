@@ -581,6 +581,48 @@ mod tests {
     }
 
     mod add_task_for_user {
-        // TODO
+        use super::*;
+
+        fn new_task_payload() -> dto::NewTask {
+            dto::NewTask {
+                item_desc: "Something to do".to_owned(),
+            }
+        }
+        #[tokio::test]
+        async fn happy_path() {
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.create_task_for_user_result.set_returned_result(Ok(10));
+            });
+
+            let (status, Json(new_task_info)) =
+                add_task_for_user(3, new_task_payload(), &mut ext_cxn, &task_service)
+                    .await
+                    .unwrap_or_else(|err| {
+                        panic!("Didn't get a successful response: {:#?}", err);
+                    });
+
+            assert_eq!(StatusCode::CREATED, status);
+            assert_eq!(10, new_task_info.id);
+        }
+
+        #[tokio::test]
+        async fn gives_appropriate_404_on_no_user() {
+            let mut ext_cxn = external_connections::test_util::FakeExternalConnectivity::new();
+            let task_service = domain::todo::test_util::MockTaskService::build_locked(|svc| {
+                svc.create_task_for_user_result
+                    .set_returned_result(Err(TaskError::UserDoesNotExist));
+            });
+
+            let response = add_task_for_user(10, new_task_payload(), &mut ext_cxn, &task_service)
+                .await
+                .into_response();
+            let (parts, body) = response.into_parts();
+
+            assert_eq!(StatusCode::NOT_FOUND, parts.status);
+
+            let deserialized_body: BasicErrorResponse = deserialize_body(body).await;
+            assert_eq!("no_matching_user", deserialized_body.error_code);
+        }
     }
 }
