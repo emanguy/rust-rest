@@ -15,8 +15,16 @@ use utoipa::OpenApi;
 use validator::Validate;
 
 #[derive(OpenApi)]
-#[openapi(paths(get_users,))]
+#[openapi(paths(
+    get_users,
+    create_user,
+    get_tasks_for_user,
+    get_task_for_user,
+    add_task_for_user,
+))]
 pub struct UsersApi;
+
+pub const USER_API_GROUP: &str = "Users";
 
 /// Builds a router for all the user routes
 pub fn user_routes() -> Router<Arc<SharedData>> {
@@ -77,11 +85,11 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
 #[utoipa::path(
     get,
     path = "/users",
+    tag = USER_API_GROUP,
     responses(
-        (status = 200, description = "A list of users in the system", body = Vec<TodoUser>),
-        (status = 500, response = dto::BasicError)
+        (status = 200, description = "User list successfully retrieved", body = Vec<TodoUser>),
+        (status = 500, response = dto::err_resps::BasicError500)
     ),
-    tag = "Users"
 )]
 async fn get_users(
     ext_cxn: &mut impl ExternalConnectivity,
@@ -106,6 +114,27 @@ async fn get_users(
 }
 
 /// Creates a user.
+#[utoipa::path(
+    post,
+    path = "/users",
+    tag = USER_API_GROUP,
+    request_body = NewUser,
+    responses(
+        (status = 201, description = "User successfully created", body = InsertedUser),
+        (status = 400, response = dto::err_resps::BasicError400Validation),
+        (
+            status = 409,
+            description = "User with matching data already exists (error code `user_exists`)", 
+            body = BasicError,
+            example = json!({
+                "error_code": "user_exists",
+                "error_description": "A user with the same information already exists.",
+                "extra_info": null,
+            }),
+        ),
+        (status = 500, response = dto::err_resps::BasicError500)
+    )
+)]
 async fn create_user(
     new_user: dto::NewUser,
     ext_cxn: &mut impl ExternalConnectivity,
@@ -173,6 +202,28 @@ fn handle_todo_task_err(err: TaskError) -> ErrorResponse {
 }
 
 /// Retrieves a set of tasks owned by a user
+#[utoipa::path(
+    get,
+    path = "/users/{user_id}/tasks",
+    tag = super::todo::TASK_API_GROUP,
+    params(
+        ("user_id" = i32, Path, description = "Which user to look up tasks for")
+    ),
+    responses(
+        (status = 200, description = "Task list successfully retrieved", body = Vec<TodoTask>),
+        (
+            status = 404,
+            description = "The requested user does not exist in the system (error code `no_matching_user`)",
+            body = BasicError,
+            example = json!({
+                "error_code": "no_matching_user",
+                "error_description": "No user exists in the system with the given id",
+                "extra_info": null,
+            })
+        ),
+        (status = 500, response = dto::err_resps::BasicError500)
+    ),
+)]
 async fn get_tasks_for_user(
     user_id: i32,
     ext_cxn: &mut impl ExternalConnectivity,
@@ -201,6 +252,43 @@ struct GetTaskPath {
 }
 
 /// Retrieves a specific task owned by a user
+#[utoipa::path(
+    get,
+    path = "/users/{user_id}/tasks/{task_id}",
+    tag = super::todo::TASK_API_GROUP,
+    params(
+        ("user_id" = i32, Path, description = "The user ID to retrieve a task from"),
+        ("task_id" = i32, Path, description = "The task ID to retrieve from the user"),
+    ),
+    responses(
+        (status = 200, description = "Task successfully retrieved", body = TodoTask),
+        (
+            status = 404,
+            description = "Specified user or task does not exist",
+            body = BasicError,
+            examples(
+                ("No user" = (
+                    summary = "User does not exist (error code no_matching_user)",
+                    value = json!({
+                        "error_code": "no_matching_user",
+                        "error_description": "There is no user in the system with the given ID.",
+                        "extra_info": null,
+                    })
+                )),
+
+                ("No task" = (
+                    summary = "Task does not exist (error code no_matching_task)",
+                    value = json!({
+                        "error_code": "no_matching_task",
+                        "error_description": "The given user does not have a task with the given ID.",
+                        "extra_info": null,
+                    })
+                ))
+            )
+        ),
+        (status = 500, response = dto::err_resps::BasicError500),
+    )
+)]
 async fn get_task_for_user(
     path: GetTaskPath,
     ext_cxn: &mut impl ExternalConnectivity,
@@ -240,6 +328,30 @@ async fn get_task_for_user(
 }
 
 /// Adds a new task for a user
+#[utoipa::path(
+    post,
+    path = "/users/{user_id}/tasks",
+    tag = super::todo::TASK_API_GROUP,
+    params(
+        ("user_id" = i32, Path, description = "The user to add a task for")
+    ),
+    request_body = NewTask,
+    responses(
+        (status = 201, description = "Task successfully created", body = InsertedTask),
+        (status = 400, response = dto::err_resps::BasicError400Validation),
+        (
+            status = 404,
+            description = "Specified user does not exist (error code `no_matching_user`)",
+            body = BasicError,
+            example = json!({
+                "error_code": "no_matching_user",
+                "error_description": "No user in the system matches the given ID.",
+                "extra_info": null,
+            })
+        ),
+        (status = 500, response = dto::err_resps::BasicError500),
+    ),
+)]
 async fn add_task_for_user(
     user_id: i32,
     new_task: dto::NewTask,

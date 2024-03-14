@@ -5,7 +5,7 @@ use axum_macros::FromRequest;
 
 use serde::Serialize;
 
-use crate::dto::{BasicError, ExtraInfo};
+use crate::dto::{BasicError, ExtraInfo, ValidationErrorSchema};
 use validator::ValidationErrors;
 
 /// Represents a generic 500 internal server error which turns into a [BasicError]
@@ -35,7 +35,7 @@ impl IntoResponse for ValidationErrorResponse {
             Json(BasicError {
                 error_code: "invalid_input".into(),
                 error_description: "Submitted data was invalid.".to_owned(),
-                extra_info: Some(ExtraInfo::ValidationIssues(self.0)),
+                extra_info: Some(ExtraInfo::ValidationIssues(ValidationErrorSchema(self.0))),
             }),
         )
             .into_response()

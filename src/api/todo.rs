@@ -4,42 +4,58 @@ use crate::{domain, dto, persistence, AppState, SharedData};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{ErrorResponse, IntoResponse, Response};
-use axum::routing::{delete, patch};
+use axum::routing::patch;
 use axum::Router;
 use log::{error, info};
 use std::sync::Arc;
+use utoipa::OpenApi;
 use validator::Validate;
+
+#[derive(OpenApi)]
+#[openapi(paths(update_task, delete_task,))]
+pub struct TaskApi;
+pub const TASK_API_GROUP: &str = "Tasks";
 
 /// Adds routes under "/tasks" and routes for user-owned tasks to the application router
 pub fn task_routes() -> Router<Arc<SharedData>> {
-    Router::new()
-        .route(
-            "/tasks/:task_id",
-            patch(
-                |State(app_state): AppState,
-                 Path(task_id): Path<i32>,
-                 Json(update): Json<dto::UpdateTask>| async move {
-                    let mut ext_cxn = app_state.ext_cxn.clone();
-                    let task_service = domain::todo::TaskService {};
+    Router::new().route(
+        "/:task_id",
+        patch(
+            |State(app_state): AppState,
+             Path(task_id): Path<i32>,
+             Json(update): Json<dto::UpdateTask>| async move {
+                let mut ext_cxn = app_state.ext_cxn.clone();
+                let task_service = domain::todo::TaskService {};
 
-                    update_task(task_id, update, &mut ext_cxn, &task_service).await
-                },
-            ),
+                update_task(task_id, update, &mut ext_cxn, &task_service).await
+            },
         )
-        .route(
-            "/tasks/:task_id",
-            delete(
-                |State(app_state): AppState, Path(task_id): Path<i32>| async move {
-                    let mut ext_cxn = app_state.ext_cxn.clone();
-                    let task_service = domain::todo::TaskService {};
+        .delete(
+            |State(app_state): AppState, Path(task_id): Path<i32>| async move {
+                let mut ext_cxn = app_state.ext_cxn.clone();
+                let task_service = domain::todo::TaskService {};
 
-                    delete_task(task_id, &mut ext_cxn, &task_service).await
-                },
-            ),
-        )
+                delete_task(task_id, &mut ext_cxn, &task_service).await
+            },
+        ),
+    )
 }
 
 /// Updates the content of a task
+#[utoipa::path(
+    patch,
+    path = "/tasks/{task_id}",
+    tag = TASK_API_GROUP,
+    params(
+        ("task_id" = i32, Path, description = "The ID of the task to update"),
+    ),
+    request_body = UpdateTask,
+    responses(
+        (status = 200, description = "Task successfully updated"),
+        (status = 400, response = dto::err_resps::BasicError400Validation),
+        (status = 500, response = dto::err_resps::BasicError500),
+    ),
+)]
 async fn update_task(
     task_id: i32,
     task_data: dto::UpdateTask,
@@ -67,6 +83,18 @@ async fn update_task(
 }
 
 /// Deletes a task
+#[utoipa::path(
+    delete,
+    path = "/tasks/{task_id}",
+    tag = TASK_API_GROUP,
+    params(
+        ("task_id" = i32, Path, description = "The ID of the task to delete")
+    ),
+    responses(
+        (status = 200, description = "Task successfully deleted"),
+        (status = 500, response = dto::err_resps::BasicError500),
+    ),
+)]
 async fn delete_task(
     task_id: i32,
     ext_cxn: &mut impl ExternalConnectivity,

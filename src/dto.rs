@@ -1,19 +1,30 @@
 use crate::domain;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
-use utoipa::{OpenApi, ToResponse, ToSchema};
+use utoipa::openapi::{RefOr, Schema};
+use utoipa::{openapi, OpenApi, ToSchema};
 use validator::{Validate, ValidationErrors};
 
 #[derive(OpenApi)]
-#[openapi(components(schemas(
-    TodoUser,
-    NewUser,
-    InsertedUser,
-    NewTask,
-    TodoTask,
-    UpdateTask,
-    InsertedTask,
-)))]
+#[openapi(components(
+    schemas(
+        TodoUser,
+        NewUser,
+        InsertedUser,
+        NewTask,
+        TodoTask,
+        UpdateTask,
+        InsertedTask,
+        BasicError,
+        ExtraInfo,
+        ValidationErrorSchema,
+    ),
+    responses(
+        err_resps::BasicError400Validation,
+        err_resps::BasicError404,
+        err_resps::BasicError500,
+    ),
+))]
 pub struct OpenApiSchemas;
 
 /// DTO for a constructed user
@@ -114,30 +125,26 @@ pub struct InsertedTask {
 }
 
 /// Contains diagnostic information about an API failure
-#[derive(Serialize, Debug, ToResponse)]
+#[derive(Serialize, Debug, ToSchema)]
 #[cfg_attr(test, derive(Deserialize))]
-#[response(examples(
-    ("Not Found" = (
-        summary = "Entity could not be found (404)",
-        value = json!({
-            "error_code": "not_found",
-            "error_description": "The requested entity could not be found.",
-            "extra_info": null
-        })
-    )),
+pub struct BasicError {
+    pub error_code: String,
+    pub error_description: String,
 
-    ("Internal Failure" = (
-        summary = "Something unexpected went wrong inside the server (500)",
-        value = json!({
-            "error_code": "internal_error",
-            "error_description": "Could not access data to complete your request",
-            "extra_info": null
-        })
-    )),
+    #[serde(skip_deserializing)]
+    pub extra_info: Option<ExtraInfo>,
+}
 
-    ("Invalid Input" = (
-        summary = "Invalid request body was passed (400)",
-        value = json!({
+/// Contains a set of generic OpenAPI error responses based on [BasicError] that can
+/// be easily reused in other requests
+pub mod err_resps {
+    use crate::dto::BasicError;
+    use utoipa::ToResponse;
+
+    #[derive(ToResponse)]
+    #[response(
+        description = "Invalid request body was passed",
+        example = json!({
             "error_code": "invalid_input",
             "error_description": "Submitted data was invalid.",
             "extra_info": {
@@ -153,30 +160,51 @@ pub struct InsertedTask {
                 ]
             }
         })
-    )),
+    )]
+    pub struct BasicError400Validation(BasicError);
 
-    ("Malformed JSON" = (
-        summary = "Invalid JSON passed to server (400)",
-        value = json!({
-            "error_code": "invalid_json",
-            "error_description": "The passed request body contained malformed or unreadable JSON.",
-            "extra_info": "Failed to parse the request body as JSON: EOF while parsing an object at line 4 column 0"
+    #[derive(ToResponse)]
+    #[response(
+        description = "Entity could not be found",
+        example = json!({
+            "error_code": "not_found",
+            "error_description": "The requested entity could not be found.",
+            "extra_info": null
         })
-    ))
-))]
-pub struct BasicError {
-    pub error_code: String,
-    pub error_description: String,
+    )]
+    pub struct BasicError404(BasicError);
 
-    #[serde(skip_deserializing)]
-    pub extra_info: Option<ExtraInfo>,
+    #[derive(ToResponse)]
+    #[response(
+    description = "Something unexpected went wrong inside the server",
+    example = json!({
+            "error_code": "internal_error",
+            "error_description": "Could not access data to complete your request",
+            "extra_info": null
+        })
+    )]
+    pub struct BasicError500(BasicError);
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Debug, ToSchema)]
 #[serde(untagged)]
 pub enum ExtraInfo {
-    ValidationIssues(ValidationErrors),
+    ValidationIssues(ValidationErrorSchema),
     Message(String),
+}
+
+/// Stand-in OpenAPI schema for [ValidationErrors] which just provides an empty object
+#[derive(Serialize, Debug)]
+#[serde(transparent)]
+pub struct ValidationErrorSchema(pub ValidationErrors);
+
+impl<'schem> ToSchema<'schem> for ValidationErrorSchema {
+    fn schema() -> (&'schem str, RefOr<Schema>) {
+        (
+            "ValidationErrorSchema",
+            openapi::ObjectBuilder::new().into(),
+        )
+    }
 }
 
 #[cfg(test)]

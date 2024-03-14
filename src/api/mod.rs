@@ -1,3 +1,4 @@
+pub mod swagger_main;
 pub mod todo;
 pub mod user;
 

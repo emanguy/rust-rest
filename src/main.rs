@@ -52,6 +52,7 @@ async fn main() {
     let router = Router::new()
         .nest("/users", api::user::user_routes())
         .nest("/tasks", api::todo::task_routes())
+        .merge(api::swagger_main::build_documentation())
         .with_state(Arc::new(SharedData { ext_cxn }));
 
     info!("Starting server.");
