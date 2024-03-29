@@ -1,8 +1,11 @@
-# Rust REST Server
+# Rust REST Server Template
 
-Test of building a REST API using Axum with the SQLX PostgreSQL connection pool. Start the server with `cargo run`. Run tests with `cargo test`.
+This repository contains a starting point for a testable Rust microservice using Hexagonal Architecture. Here's how to get started:
 
-_Note that the server requires a PostgreSQL database to run properly. A docker compose file is provided to start the database at your convenience._
+1. Run `docker compose up` to start the PostgeSQL server that the microservice depends on.
+2. Run `cargo run` to start the microservice.
+
+Additional documentation and "getting started" material can be found in the [template documentation](./doc/index.md).
 
 ## Benchmark
 
