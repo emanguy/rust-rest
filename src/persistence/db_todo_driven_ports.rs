@@ -4,7 +4,7 @@ use crate::external_connections::{ConnectionHandle, ExternalConnectivity};
 use anyhow::{Context, Error};
 use sqlx::{query, query_as};
 
-pub struct DbTaskReader {}
+pub struct DbTaskReader;
 
 struct TodoItemRow {
     id: i32,
@@ -68,7 +68,7 @@ impl domain::todo::driven_ports::TaskReader for DbTaskReader {
     }
 }
 
-pub struct DbTaskWriter {}
+pub struct DbTaskWriter;
 
 impl domain::todo::driven_ports::TaskWriter for DbTaskWriter {
     async fn create_task_for_user(

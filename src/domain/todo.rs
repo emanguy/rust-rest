@@ -148,7 +148,7 @@ pub mod driving_ports {
     }
 }
 
-pub struct TaskService {}
+pub struct TaskService;
 
 impl driving_ports::TaskPort for TaskService {
     async fn tasks_for_user(

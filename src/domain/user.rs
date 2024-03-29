@@ -106,7 +106,7 @@ pub mod driving_ports {
     }
 }
 
-pub struct UserService {}
+pub struct UserService;
 
 #[derive(Debug, Error)]
 pub(super) enum UserExistsErr {

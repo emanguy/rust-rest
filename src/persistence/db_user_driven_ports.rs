@@ -6,7 +6,7 @@ use crate::external_connections::{ConnectionHandle, ExternalConnectivity};
 use anyhow::{Context, Error};
 use sqlx::query_as;
 
-pub struct DbDetectUser {}
+pub struct DbDetectUser;
 
 impl domain::user::driven_ports::DetectUser for DbDetectUser {
     async fn user_exists(
@@ -49,7 +49,7 @@ impl domain::user::driven_ports::DetectUser for DbDetectUser {
     }
 }
 
-pub struct DbReadUsers {}
+pub struct DbReadUsers;
 
 struct TodoUserRow {
     id: i32,
@@ -105,7 +105,7 @@ impl domain::user::driven_ports::UserReader for DbReadUsers {
     }
 }
 
-pub struct DbWriteUsers {}
+pub struct DbWriteUsers;
 
 impl domain::user::driven_ports::UserWriter for DbWriteUsers {
     async fn create_user(
