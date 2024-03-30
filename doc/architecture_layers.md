@@ -273,4 +273,190 @@ business logic via the HTTP server.
 
 ### Implementing the driven adapter (database)
 
-TODO.
+To implement the driven adapter, we'll need to create a couple of empty structs and use them to implement the `PlayerDetector`
+and `PlayerWriter` structs. From the `ExternalConnectivity` struct, we can acquire a connection to the database and use it
+with `sqlx` to retrieve data from the database. Remember that we need to convert domain types into DTOs before sending them
+to the database, and only respond to the domain with domain types and errors. This enforces a strict boundary between
+the business logic and the actual implementation detail of connecting to the database as an external data source. This
+decoupling allows for easy swapping of underlying implementations if need be.
+
+Note that the `persistence` package includes utilities to transform anything that implements the `Debug` and `Display` traits
+into an `anyhow::Error` called `anyhowify()`. There are also utilities for extracting the ID of inserted data, such as the
+`NewId` struct. Similarly, `Count` stores the output of the `count()` SQL function.
+
+The really neat thing about using SQLx for queries is that it will automatically verify type compatibility between your
+DTOs and the database schema during build time automatically. Just another layer of correctness for your API.
+
+Here's how we can implement those driven adapters:
+
+<details>
+<summary>Implementation of the driven adapters</summary>
+
+```rust
+// This example takes place in persistence/db_player_driven_ports.rs
+use sqlx::query_as;
+
+// Define a struct for the implementation of the driven adapter
+pub struct DbPlayerWriter;
+
+impl domain::player::driven_ports::PlayerWriter for DbPlayerWriter {
+    async fn new_player(&self, creation_data: &domain::player::PlayerCreate, ext_cxn: &mut impl ExternalConnectivity) -> Result<i32, anyhow::Error> {
+        // Acquire a database connection
+        let mut cxn = ext_cxn.database_cxn().await.map_err(super::anyhowify)?;
+        
+        // Make the database query. In this case, NewId is our re-usable DTO
+        // used for acquiring the id of the information added into the database
+        let new_id = query_as!(
+            super::NewId,
+            "INSERT INTO players(username, full_name) VALUES ($1, $2) RETURNING players.id",
+            creation_data.username,
+            creation_data.full_name,
+        )
+            .fetch_one(cxn.borrow_connection())
+            .await
+            .context("trying to insert a new player into the database")?;
+        
+        // Convert the DTO into the domain type and return (typically this is a more complex data structure,
+        // but we only need the ID here)
+        Ok(new_id.id)
+    }
+}
+
+// This struct implements the other driven adapter
+pub struct DbPlayerDetector;
+
+impl domain::player::driven_ports::PlayerDetector for DbPlayerDetector {
+    async fn player_with_username_exists(&self, username: &str, ext_cxn: &mut impl ExternalConnectivity) -> Result<bool, anyhow::Error> {
+        // Acquire a database connection
+        let mut cxn = ext_cxn.database_cxn().await.map_err(super::anyhowify)?;
+        
+        // Make the query
+        let username_count = query_as!(
+            super::Count,
+            "SELECT count(*) FROM players WHERE username = $1",
+            username
+        )
+            .fetch_one(cxn.borrow_connection())
+            .await
+            .context("detecting existing players with a given username")?;
+        
+        // Return the result
+        Ok(username_count.count() > 0)
+    }
+}
+```
+</details>
+
+### Implementing the driving adapter
+
+With the business logic and driven adapters in place, we can now implement an HTTP-based driving adapter to trigger
+everything end-to-end. The driven adapter is implemented in 2 parts - the request extractor function and the request logic
+itself. This separation is in place to make it easy to mock out the business logic in tests. We'll first look at the code
+for the request logic, then integrate it into the Axum router with the request extractor function.
+
+#### Request Logic
+
+The request logic starts by taking in any required information, then an implementation of both `ExternalConnectivity` and
+the driving adapter.
+
+##### DTOs and Validation
+
+In order to get that required information, we'll need to define a DTO for our request body. Request bodies only need to
+implement [serde](https://serde.rs/)'s `Deserialize` trait, while responses need to implement `Serialize`. Let's define our request and response
+bodies. We can also use the `rename_all` piece of the serde annotation to make the data structure accept and output fields
+in camel case, which is typical for JS/TS code which would consume the API.
+
+```rust
+// in dto.rs
+use serde::{Serialize, Deserialize};
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerCreateRequest {
+    full_name: String,
+    username: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerCreateResponse {
+    new_player_id: i32,
+}
+```
+
+Now, recall that one of our requirements for creating the player was that there should be some basic validation on the
+incoming data. That can be done by deriving [validator::Validate](https://docs.rs/validator/latest/validator/index.html)
+on our request. Let's add some validation which requires the full name to be 1-256 characters, and the username to be
+1-32 characters in length.
+
+```rust
+// in dto.rs
+use serde::{Serialize, Deserialize};
+use validator::Validate;
+
+// We're now also deriving Validate so we get the .validate() function on our DTO
+#[derive(Deserialize, Validate)]
+#[serde(rename_all = "camelCase")]
+pub struct PlayerCreateRequest {
+    // The full name should be 1-256 characters in length
+    #[validate(length(min = 1, max = 256))]
+    full_name: String,
+    
+    // The username can only be 1-32 characters in length
+    #[validate(length(min = 1, max = 32))]
+    username: String,
+}
+
+// ...response DTO
+```
+
+It can also be useful to implement the `From` trait on domain types so we can convert DTOs into domain types in a single line
+of code. Let's do that while we're here:
+
+```rust
+// in dto.rs
+
+// ...definition of PlayerCreateRequest
+
+impl From<PlayerCreateRequest> for domain::player::PlayerCreate {
+    fn from(value: PlayerCreateRequest) -> Self {
+        Self {
+            full_name: value.full_name,
+            username: value.username,
+        } 
+    }
+}
+
+// ...response DTO
+```
+
+##### Request logic function
+
+Now that we have DTOs for our request, let's actually implement the request function. The conventional order of parameters
+for a request function is:
+
+1. DTOs and required data
+2. ExternalConnectivity implementation
+3. Driving Port for the business logic
+
+Because the business logic is mocked out in tests, we can actually create instances of the driven adapters inside the logic
+of the function as they won't ever be invoked.
+
+Many responses are common across various endpoints on the microservice, so canned responses are available in the `routing_utils` package.
+We'll use some of these for generic 500 errors and validation errors. Otherwise, [axum-compatible response types](https://docs.rs/axum/0.7.5/axum/response/index.html#building-responses) 
+should be returned from the routing logic function.
+
+We'll also need to interpret the result from the business logic and turn it into an appropriate HTTP response, complete with
+appropriate status codes and DTOs. Here's how the logic would be implemented:
+
+```rust
+// In api/player.rs
+
+async fn create_player(
+    new_player: dto::PlayerCreateRequest,
+    ext_cxn: &mut impl ExternalConnectivity,
+    player_service: &impl domain::player::driving_ports::PlayerPort,
+) -> Result<Json(PlayerCreateResponse), ErrorResponse> {
+    // TODO
+}
+```

@@ -32,14 +32,14 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
         .route(
             "/",
             get(|State(app_data): AppState| async move {
-                let user_service = domain::user::UserService {};
+                let user_service = domain::user::UserService;
                 let mut external_connectivity = app_data.ext_cxn.clone();
 
                 get_users(&mut external_connectivity, &user_service).await
             })
             .post(
                 |State(app_data): AppState, Json(new_user): Json<dto::NewUser>| async move {
-                    let user_service = domain::user::UserService {};
+                    let user_service = domain::user::UserService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
                     create_user(new_user, &mut external_connectivity, &user_service).await
@@ -50,7 +50,7 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
             "/:user_id/tasks",
             get(
                 |State(app_data): AppState, Path(user_id): Path<i32>| async move {
-                    let task_service = domain::todo::TaskService {};
+                    let task_service = domain::todo::TaskService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
                     get_tasks_for_user(user_id, &mut external_connectivity, &task_service).await
@@ -60,7 +60,7 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
                 |State(app_data): AppState,
                  Path(user_id): Path<i32>,
                  Json(new_task): Json<dto::NewTask>| async move {
-                    let task_service = domain::todo::TaskService {};
+                    let task_service = domain::todo::TaskService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
                     add_task_for_user(user_id, new_task, &mut external_connectivity, &task_service)
@@ -72,7 +72,7 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
             "/:user_id/tasks/:task_id",
             get(
                 |State(app_data): AppState, Path(path): Path<GetTaskPath>| async move {
-                    let task_service = domain::todo::TaskService {};
+                    let task_service = domain::todo::TaskService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
                     get_task_for_user(path, &mut external_connectivity, &task_service).await
@@ -96,7 +96,7 @@ async fn get_users(
     user_service: &impl domain::user::driving_ports::UserPort,
 ) -> Result<Json<Vec<dto::TodoUser>>, ErrorResponse> {
     info!("Requested users");
-    let user_reader = persistence::db_user_driven_ports::DbReadUsers {};
+    let user_reader = persistence::db_user_driven_ports::DbReadUsers;
     let users_result = user_service.get_users(&mut *ext_cxn, &user_reader).await;
     if users_result.is_err() {
         error!(
@@ -143,8 +143,8 @@ async fn create_user(
     info!("Attempt to create user: {}", new_user);
     new_user.validate().map_err(ValidationErrorResponse::from)?;
 
-    let user_detector = persistence::db_user_driven_ports::DbDetectUser {};
-    let user_writer = persistence::db_user_driven_ports::DbWriteUsers {};
+    let user_detector = persistence::db_user_driven_ports::DbDetectUser;
+    let user_writer = persistence::db_user_driven_ports::DbWriteUsers;
 
     let domain_user_create = domain::user::CreateUser {
         first_name: new_user.first_name,
@@ -231,8 +231,8 @@ async fn get_tasks_for_user(
 ) -> Result<Json<Vec<dto::TodoTask>>, ErrorResponse> {
     info!("Get tasks for user {user_id}");
     // let tasks = db::get_tasks_for_user(db_cxn, user_id).await;
-    let user_detect = persistence::db_user_driven_ports::DbDetectUser {};
-    let task_read = persistence::db_todo_driven_ports::DbTaskReader {};
+    let user_detect = persistence::db_user_driven_ports::DbDetectUser;
+    let task_read = persistence::db_todo_driven_ports::DbTaskReader;
 
     let tasks_result = task_service
         .tasks_for_user(user_id, &mut *ext_cxn, &user_detect, &task_read)
@@ -296,8 +296,8 @@ async fn get_task_for_user(
 ) -> Result<Json<dto::TodoTask>, ErrorResponse> {
     info!("Get task {} for user {}", path.task_id, path.user_id);
 
-    let user_detect = persistence::db_user_driven_ports::DbDetectUser {};
-    let task_read = persistence::db_todo_driven_ports::DbTaskReader {};
+    let user_detect = persistence::db_user_driven_ports::DbDetectUser;
+    let task_read = persistence::db_todo_driven_ports::DbTaskReader;
 
     let task_result = task_service
         .user_task_by_id(
@@ -361,8 +361,8 @@ async fn add_task_for_user(
     info!("Adding task for user {user_id}");
     new_task.validate().map_err(ValidationErrorResponse::from)?;
 
-    let user_detect = persistence::db_user_driven_ports::DbDetectUser {};
-    let task_write = persistence::db_todo_driven_ports::DbTaskWriter {};
+    let user_detect = persistence::db_user_driven_ports::DbDetectUser;
+    let task_write = persistence::db_todo_driven_ports::DbTaskWriter;
     let domain_new_task = domain::todo::NewTask::from(new_task);
 
     let inserted_task_result = task_service

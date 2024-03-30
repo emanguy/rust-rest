@@ -3,7 +3,6 @@ use crate::domain;
 use crate::domain::user::driven_ports::UserDescription;
 use crate::domain::user::{CreateUser, TodoUser};
 use crate::external_connections::{ConnectionHandle, ExternalConnectivity};
-use anyhow::{Context, Error};
 use sqlx::query_as;
 
 pub struct DbDetectUser;
@@ -32,7 +31,7 @@ impl domain::user::driven_ports::DetectUser for DbDetectUser {
         &self,
         description: UserDescription<'strings>,
         ext_cxn: &mut impl ExternalConnectivity,
-    ) -> Result<bool, Error> {
+    ) -> Result<bool, anyhow::Error> {
         let mut connection = ext_cxn.database_cxn().await.map_err(super::anyhowify)?;
 
         let user_with_name_count = query_as!(
@@ -71,7 +70,7 @@ impl domain::user::driven_ports::UserReader for DbReadUsers {
     async fn get_all(
         &self,
         ext_cxn: &mut impl ExternalConnectivity,
-    ) -> Result<Vec<TodoUser>, Error> {
+    ) -> Result<Vec<TodoUser>, anyhow::Error> {
         let mut connection = ext_cxn.database_cxn().await.map_err(super::anyhowify)?;
 
         let users: Vec<TodoUser> = query_as!(TodoUserRow, "SELECT * FROM todo_user")
@@ -89,7 +88,7 @@ impl domain::user::driven_ports::UserReader for DbReadUsers {
         &self,
         id: i32,
         ext_cxn: &mut impl ExternalConnectivity,
-    ) -> Result<Option<TodoUser>, Error> {
+    ) -> Result<Option<TodoUser>, anyhow::Error> {
         let mut cxn_handle = ext_cxn.database_cxn().await.map_err(super::anyhowify)?;
 
         let user = query_as!(
@@ -112,7 +111,7 @@ impl domain::user::driven_ports::UserWriter for DbWriteUsers {
         &self,
         user: &CreateUser,
         ext_cxn: &mut impl ExternalConnectivity,
-    ) -> Result<i32, Error> {
+    ) -> Result<i32, anyhow::Error> {
         let mut cxn_handle = ext_cxn.database_cxn().await.map_err(super::anyhowify)?;
 
         let user = query_as!(

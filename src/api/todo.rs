@@ -25,7 +25,7 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
              Path(task_id): Path<i32>,
              Json(update): Json<dto::UpdateTask>| async move {
                 let mut ext_cxn = app_state.ext_cxn.clone();
-                let task_service = domain::todo::TaskService {};
+                let task_service = domain::todo::TaskService;
 
                 update_task(task_id, update, &mut ext_cxn, &task_service).await
             },
@@ -33,7 +33,7 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
         .delete(
             |State(app_state): AppState, Path(task_id): Path<i32>| async move {
                 let mut ext_cxn = app_state.ext_cxn.clone();
-                let task_service = domain::todo::TaskService {};
+                let task_service = domain::todo::TaskService;
 
                 delete_task(task_id, &mut ext_cxn, &task_service).await
             },
@@ -68,7 +68,7 @@ async fn update_task(
         .map_err(ValidationErrorResponse::from)?;
 
     let domain_update = domain::todo::UpdateTask::from(task_data);
-    let task_writer = persistence::db_todo_driven_ports::DbTaskWriter {};
+    let task_writer = persistence::db_todo_driven_ports::DbTaskWriter;
 
     let update_result = task_service
         .update_task(task_id, &domain_update, &mut *ext_cxn, &task_writer)
@@ -101,7 +101,7 @@ async fn delete_task(
     task_service: &impl domain::todo::driving_ports::TaskPort,
 ) -> Result<StatusCode, Response> {
     info!("Deleting task {task_id}");
-    let task_write = persistence::db_todo_driven_ports::DbTaskWriter {};
+    let task_write = persistence::db_todo_driven_ports::DbTaskWriter;
 
     let delete_result = task_service
         .delete_task(task_id, &mut *ext_cxn, &task_write)
