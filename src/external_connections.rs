@@ -4,40 +4,58 @@ use std::fmt::{Debug, Display};
 use std::future::Future;
 use thiserror::Error;
 
+/// TransactableExternalConnectivity represents an [ExternalConnectivity] that can initiate
+/// a database transaction
 pub trait TransactableExternalConnectivity: ExternalConnectivity + Transactable + Sync {}
 
 impl<T: ExternalConnectivity + Transactable + Sync> TransactableExternalConnectivity for T {}
 
+/// ExternalConnectivity owns clients that are able to communicate with the outside world,
+/// such as database clients, HTTP clients, and more.
 pub trait ExternalConnectivity: Sync {
     type Handle<'handle>: ConnectionHandle + 'handle
     where
         Self: 'handle;
     type Error: Debug + Display;
 
+    /// Acquire a handle which allows borrowing a connection from the database pool
     async fn database_cxn(&mut self) -> Result<Self::Handle<'_>, Self::Error>;
 }
 
+/// ConnectionHandle is a handle borrowed from [ExternalConnectivity] which you can
+/// use to acquire a connection to the database
 pub trait ConnectionHandle {
+    /// Borrow a connection from the database pool to perform a query
     fn borrow_connection(&mut self) -> &mut PgConnection;
 }
 
+/// Anything that can initiate a database transaction
 pub trait Transactable: Sync {
     type Handle<'handle>: TransactionHandle + 'handle
     where
         Self: 'handle;
     type Error: Debug + Display;
 
+    /// Retrieve a handle which contains a database connection in an active transaction
     async fn start_transaction(&self) -> Result<Self::Handle<'_>, Self::Error>;
 }
 
+/// TransactionHandle is a handle borrowed from [Transactable] which represents
+/// an in-flight database transaction that can later be committed. It is expected
+/// that dropping the handle without invoking `TransactionHandle::commit` will
+/// roll back the transaction
 pub trait TransactionHandle: Sync {
     type Error: Debug + Display;
 
+    /// Commit the changes to the database
     async fn commit(self) -> Result<(), Self::Error>;
 }
 
 #[allow(dead_code)]
 #[derive(Debug, Error)]
+/// This error reports issues that occur during database transactions, allowing the
+/// original result of a [with_transaction]'s lambda to be retrieved even if the transaction
+/// commit fails.
 pub enum TxOrSourceError<SourceValue, SourceErr, TxBeginErr, TxCommitErr>
 where
     SourceErr: Debug + Display,
@@ -45,12 +63,20 @@ where
     TxCommitErr: Debug + Display,
 {
     #[error(transparent)]
+    /// Represents that the lambda failed, returning the error from the lambda
     Source(SourceErr),
+    
     #[error("Failed to start the transaction: {0}")]
+    /// Represents that the database failed to start the transaction, and the lambda did not execute.
     TxBegin(TxBeginErr),
+    
     #[error("Got a successful result, but the database transaction failed: {transaction_err}")]
+    /// Represents that the lambda executed successfully, but the database transaction failed to commit.
+    /// The original result of the lambda is provided in this error.
     TxCommit {
+        /// The success value returned from the lambda
         successful_result: SourceValue,
+        /// The database error that occurred when the commit failed
         transaction_err: TxCommitErr,
     },
 }
@@ -63,7 +89,7 @@ where
 // Fut = "The future returned from the function passed via transaction_context which may be awaited for the return value"
 // Ret = "The type Fut resolves to if the transaction was a success"
 // ErrSource = "The error Fut resolves to if the user returns an error from Fn"
-/// Accepts [tx_origin] which can start a database transaction. It then starts a transaction,
+/// Accepts [tx_origin] which can start a database transaction. It then starts a transaction and
 /// invokes [transaction_context] with the started transaction. When [transaction_context] completes,
 /// the transaction handle passed to it is committed as long as [transaction_context] does not return
 /// a [Result::Err].
@@ -77,15 +103,15 @@ where
     ErrBegin: Debug + Display,
     Handle: TransactionHandle<Error = ErrCommit>,
     ErrCommit: Debug + Display,
-    Fn: FnOnce(&Handle) -> Fut,
+    Fn: FnOnce(&mut Handle) -> Fut,
     Fut: Future<Output = Result<Ret, ErrSource>>,
     ErrSource: Debug + Display,
 {
-    let tx_handle = tx_origin
+    let mut tx_handle = tx_origin
         .start_transaction()
         .await
         .map_err(|err| TxOrSourceError::TxBegin(err))?;
-    let ret_val = transaction_context(&tx_handle).await;
+    let ret_val = transaction_context(&mut tx_handle).await;
     if ret_val.is_ok() {
         let commit_result = tx_handle.commit().await;
         if let Err(commit_err) = commit_result {
