@@ -5,7 +5,7 @@ This repository contains a starting point for a testable Rust microservice using
 1. Run `docker compose up` to start the PostgeSQL server that the microservice depends on.
 2. Run `cargo run` to start the microservice.
 
-Additional documentation and "getting started" material can be found in the [template documentation](./doc/index.md).
+Additional documentation and "getting started" material can be found in the [template documentation](./doc/README).
 
 ## Benchmark
 
@@ -70,14 +70,4 @@ docker-compose up -d
 cargo test --features integration_test
 ```
 
-### Marking a test as an integration test
-
-Tests can be marked as integration tests by conditionally adding the "ignore" attribute to a test function based on the presence of the "integration_test" feature:
-
-```rust
-#[test]
-#[cfg_attr(not(feature = "integration_test"), ignore)]
-fn my_test() {
-  // ...
-}
-```
+More information on integration testing can be found in the [testing documentation](./doc/testing.md).
