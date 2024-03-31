@@ -81,18 +81,18 @@ expected errors. Each set of ports will be defined in their own submodule.
 // Structs containing data for specific operations should be defined
 // separately from structs that contain a full set of data.
 pub struct PlayerCreate {
-    username: String,
-    full_name: String,
+    pub username: String,
+    pub full_name: String,
 }
 
 // This struct can be consumed later, but contains all
 // pertinent information about a player
 pub struct Player {
-    id: i32,
-    username: String,
-    full_name: String,
-    level: i32,
-    in_good_standing: bool,
+    pub id: i32,
+    pub username: String,
+    pub full_name: String,
+    pub level: i32,
+    pub in_good_standing: bool,
 }
 
 // All driven port traits are defined in this submodule
@@ -179,7 +179,9 @@ pub mod driving_ports {
     
     // This trait is what the driving adapter will invoke to trigger the business logic
     // we write in this file
-    pub trait PlayerPort {
+    //
+    // Again, requiring Sync on the implementer gets rid of a ton of lifetime issues
+    pub trait PlayerPort: Sync {
         // The conventional order of parameters in driving port functions is:
         //   1. Actual imports
         //   2. The external connections implementation to pass to lower layers
@@ -347,7 +349,7 @@ impl domain::player::driven_ports::PlayerDetector for DbPlayerDetector {
 ```
 </details>
 
-### Implementing the driving adapter
+### Implementing the driving adapter (HTTP Routing)
 
 With the business logic and driven adapters in place, we can now implement an HTTP-based driving adapter to trigger
 everything end-to-end. The driven adapter is implemented in 2 parts - the request extractor function and the request logic
@@ -373,14 +375,14 @@ use serde::{Serialize, Deserialize};
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCreateRequest {
-    full_name: String,
-    username: String,
+    pub full_name: String,
+    pub username: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCreateResponse {
-    new_player_id: i32,
+    pub new_player_id: i32,
 }
 ```
 
@@ -447,16 +449,159 @@ We'll use some of these for generic 500 errors and validation errors. Otherwise,
 should be returned from the routing logic function.
 
 We'll also need to interpret the result from the business logic and turn it into an appropriate HTTP response, complete with
-appropriate status codes and DTOs. Here's how the logic would be implemented:
+appropriate status codes and DTOs. **NOTE: be sure to use the `routing_utils` version of the `Json` type, as it is customized to
+return the common error data structure defined in this template when used for extracting JSON in the request.** 
+Here's how the logic would be implemented:
+
+<details>
+<summary>Code example for implementing the request logic function</summary>
 
 ```rust
 // In api/player.rs
+use crate::router_util::ValidationErrorResponse;
 
 async fn create_player(
     new_player: dto::PlayerCreateRequest,
     ext_cxn: &mut impl ExternalConnectivity,
     player_service: &impl domain::player::driving_ports::PlayerPort,
-) -> Result<Json(PlayerCreateResponse), ErrorResponse> {
-    // TODO
+) -> Result<(StatusCode, Json(dto::PlayerCreateResponse)), ErrorResponse> {
+    info!("Creating a new player with the username {}.", new_player.username);
+
+    // First, we need to validate the incoming request.
+    // On an error, we can use the pre-built routing_utils::ValidationErrorResponse type
+    // to report the error to the user
+    new_player.validate().map_err(ValidationErrorResponse::from)?;
+
+    // Now that we have a valid payload, we can convert it into a domain type to pass through the driving port.
+    let player_create_domain = domain::player::PlayerCreate::from(new_player);
+
+    // Next, we can create instances of the driven adapters to pass to the business logic and
+    // attempt to create the player.
+    let player_detector = persistence::db_player_driven_ports::DbPlayerDetector;
+    let player_writer = persistence::db_player_driven_ports::DbPlayerWriter;
+
+    // We have to reborrow the ExternalConnectivity instance to retain ownership of it, as mutable references
+    // don't implement the Copy trait.
+    //
+    // Notice that you can immediately tell from the invocation that new_player both detects the existence of a player
+    // and writes a player to an external system. Beyond ownership and testing benefits, passing the driven adapters here
+    // provides a level of transparency to the operations you perform.
+    let player_create_result = player_service.new_player(&player_create_domain, &mut *ext_cxn, &player_detector, &player_writer).await;
+
+    // We now need to handle any domain errors that cropped up, or retrieve the result
+    let new_player_id = match player_create_result {
+        Ok(id) => id,
+        // If the username was already taken, we should return a 409 Conflict with an appropriate error message.
+        // The error_code field here is used to differentiate between unique errors in a class of errors, such
+        // as determining what part of a URL was missing for a 404 error
+        Err(PlayerCreateError::UsernameTaken) => {
+            warn!("Username {} was already in use.", player_create_domain.username);
+
+            // A tuple of (StatusCode, Json) can be converted into a response, and the into() on the end converts it
+            // into an ErrorResponse
+            return Err((
+                StatusCode::CONFLICT,
+
+                // BasicError is the error DTO type used throughout this template
+                Json(dto::BasicError {
+                    // The error code is a differentiator that consumers can match on to differentiate different errors
+                    // produced under the same HTTP status code
+                    error_code: "username_in_use".to_owned(),
+
+                    // The error description is a human-readable error that can be presented to users via consumers of the API
+                    error_description: format!(r#"The username "{}" is already in use. Please choose another."#, player_create_domain.username),
+
+                    // Extra info is used to provide contextual information in some cases, such as the set of failed
+                    // validations produced by a DTO's validate() function. It is intended to be extended, so feel free!
+                    extra_info: None,
+                })
+            ).into());
+        },
+
+        // This is the "unexpected error" case. We'll just use routing_utils::GenericErrorResponse to report it.
+        Err(PlayerCreateError::PortError(cause)) => {
+            error!("An unexpected error went wrong creating the player {}. Error: {}", player_create_domain.username, cause);
+
+            // GenericErrorResponse can also be converted into ErrorResponse
+            return Err(GenericErrorResponse(cause).into());
+        },
+    };
+
+    // Now that all the errors are handled, we can create our response DTO and provide a response to the user
+    let response_body = dto::PlayerCreateResponse {
+        new_player_id,
+    };
+
+    Ok((StotusCode::CREATED, Json(response_body)))
+}
+```
+
+</details>
+
+#### Request Extractor
+
+Now that the business logic is in place, we can set up a function on an Axum router by defining a function which
+creates an attachable router and setting it up to be invoked on certain HTTP routes.
+
+##### The router function
+
+Each group of APIs can be defined piecemeal and exposed via a central function which attaches the defined routes to a
+router, which can then be attached to the main Axum app. Here's how we can define that router and attach it:
+
+```rust
+// In api/player.rs
+use axum::Router;
+// This import is important!!! This version of the JSON extractor uses BasicError
+// for an error when a caller passes invalid JSON rather than Axum's error type
+use routing_util::Json;
+
+// The generic type in the return type defines the expected application
+// state that we're allowed to extract from the main Axum app.
+// This will allow us to get access to the shared ExternalConnectivity instance
+pub fn player_routes() -> Router<Arc<SharedData>> {
+    Router::new()
+    // Off of the router, we define a new route which will invoke our route logic
+    // You may assume that when the router is attached to the main app, a prefix will
+    // be added for this group of routes
+        .route(
+            "/",
+            // HTTP verb functions specify which HTTP verb will invoke the following function
+            //
+            // We're using some axum extractors here to get the application state for the
+            // ExternalConnectivity instance and the request body, which we're getting via
+            // the Json extractor
+            post(|State(app_data): AppState, 
+                  Json(player_create): Json<dto::PlayerCreateRequest>| async move {
+                // In order to invoke the route logic, we need ExternalConnectivity and
+                // the business logic instance. We'll create both, then invoke the route logic.
+                let player_service = domain::player::PlayerService;
+                let mut ext_cxn = app_data.ext_cxn.clone();
+                
+                // Remember to await the call. You'll get a nasty error otherwise.
+                create_player(player_create, &mut ext_cxn, &player_service).await
+            })
+        )
+}
+
+// ...route logic function we defined earlier
+```
+
+##### Attaching to the main Axum app
+
+With the router implemented, all that's left to do is attach it to the main axum app!
+
+```rust
+// in main.rs
+
+#[tokio::main]
+async fn main() {
+    // ...setup in the main function
+    
+    let router = Router::new()
+        // This nest() call attaches the player router to the app. Now we're ready to serve!
+        .nest("/players", api::player::player_routes())
+        .with_state(Arc::new(SharedData { ext_cxn }));
+    
+    // ...axum app starts listening
 }
 ```
