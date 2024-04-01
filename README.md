@@ -1,8 +1,11 @@
-# Rust REST Server
+# Rust REST Server Template
 
-Test of building a REST API using Axum with the SQLX PostgreSQL connection pool. Start the server with `cargo run`. Run tests with `cargo test`.
+This repository contains a starting point for a testable Rust microservice using Hexagonal Architecture. Here's how to get started:
 
-_Note that the server requires a PostgreSQL database to run properly. A docker compose file is provided to start the database at your convenience._
+1. Run `docker compose up` to start the PostgeSQL server that the microservice depends on.
+2. Run `cargo run` to start the microservice.
+
+Additional documentation and "getting started" material can be found in the [template documentation](./doc/README.md).
 
 ## Benchmark
 
@@ -58,6 +61,10 @@ Most frequently, the server responds in about 39ms and it was able to process 46
 
 The Swagger UI (provided by the [utoipa](https://github.com/juhaku/utoipa) crate) can be accessed at http://localhost:8080/swagger-ui when starting the application.
 
+## Tests
+
+Unit tests for both API routers and business logic can be run via `cargo test`.
+
 ## Integration tests
 
 Provided on this repo is a framework for integration testing. By default, the integration tests are skipped via the `#[cfg_attr()]` declaration which requires the `integration_test` feature to be enabled.
@@ -71,14 +78,4 @@ docker-compose up -d
 cargo test --features integration_test
 ```
 
-### Marking a test as an integration test
-
-Tests can be marked as integration tests by conditionally adding the "ignore" attribute to a test function based on the presence of the "integration_test" feature:
-
-```rust
-#[test]
-#[cfg_attr(not(feature = "integration_test"), ignore)]
-fn my_test() {
-  // ...
-}
-```
+More information on integration testing can be found in the [testing documentation](./doc/testing.md#writing-integration-tests).

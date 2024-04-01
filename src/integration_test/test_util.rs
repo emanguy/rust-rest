@@ -1,3 +1,4 @@
+use crate::persistence::ExternalConnectivity;
 use crate::{app_env, configure_logger, db, SharedData};
 use axum::Router;
 use dotenv::dotenv;
@@ -56,7 +57,7 @@ async fn create_test_db(
         .await
         .expect("Test failure - could not create initial connection to provision database.");
     let mut rng = thread_rng();
-    let schema_id: u32 = rng.gen_range(10_000..99_999);
+    let schema_id: i32 = rng.gen_range(10_000..99_999);
     let template_db_name = format!("test_db_{}", schema_id);
 
     if !*is_db_templatized {
@@ -100,7 +101,7 @@ async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
 }
 
 /// Prepares a database-connected application for integration tests, attaching routes via the provided
-/// function reference slice. This function returns both the database pool and a prepared application instance
+/// Axum router. This function returns both the database pool and a prepared application instance
 /// which can handle requests based on the registered routes passed to the function.
 ///
 /// Expects that the [TEST_DB_URL](app_env::test::TEST_DB_URL) environment variable is populated.
@@ -126,7 +127,9 @@ pub async fn prepare_application(routes: Router<Arc<SharedData>>) -> (Router, sq
     });
 
     let db = prepare_db(pg_connection_base_url.as_str()).await;
-    let app = routes.with_state(Arc::new(SharedData { db: db.clone() }));
+    let app = routes.with_state(Arc::new(SharedData {
+        ext_cxn: ExternalConnectivity::new(db.clone()),
+    }));
 
     (app, db)
 }

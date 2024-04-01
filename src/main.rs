@@ -2,21 +2,23 @@ use std::env;
 use std::sync::Arc;
 
 use axum::extract::State;
-use axum::routing::get;
+
 use axum::Router;
 use dotenv::dotenv;
 use log::*;
-use sqlx::PgPool;
-use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
+use tokio::net::TcpListener;
 
+mod api;
 mod app_env;
 mod db;
+mod domain;
 mod dto;
-mod entity;
-mod routes;
+// mod entity;
+mod persistence;
+// mod routes;
 mod routing_utils;
 
+mod external_connections;
 #[cfg(test)]
 mod integration_test;
 
@@ -30,34 +32,13 @@ pub fn configure_logger() {
         .init();
 }
 
+/// Global data store which is shared among HTTP routes
 pub struct SharedData {
-    pub db: PgPool,
+    pub ext_cxn: persistence::ExternalConnectivity,
 }
 
+/// Type alias for the extractor used to get access to the global app state
 type AppState = State<Arc<SharedData>>;
-
-#[derive(OpenApi)]
-#[openapi(
-    components(
-        schemas(routing_utils::ExtraInfo, routing_utils::ValidationErrorSchema),
-        responses(routing_utils::BasicErrorResponse)
-    ),
-    info(
-        title = "Rust Todo API",
-        description = "A simple to-do list API written in Rust"
-    )
-)]
-pub struct TodoApi;
-
-fn build_documentation() -> SwaggerUi {
-    let mut api_docs = TodoApi::openapi();
-    api_docs.merge(routes::UsersApi::openapi());
-    api_docs.merge(routes::TasksApi::openapi());
-    api_docs.merge(entity::SystemEntities::openapi());
-    api_docs.merge(dto::DtoEntities::openapi());
-
-    SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_docs)
-}
 
 #[tokio::main]
 async fn main() {
@@ -68,20 +49,20 @@ async fn main() {
     let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
     let sqlx_db_connection = db::connect_sqlx(&db_url).await;
-    let documentation = build_documentation();
+    let ext_cxn = persistence::ExternalConnectivity::new(sqlx_db_connection);
 
     let router = Router::new()
-        .route("/hello", get(routes::hello))
-        .merge(documentation)
-        .merge(routes::user_routes())
-        .merge(routes::task_routes())
-        .with_state(Arc::new(SharedData {
-            db: sqlx_db_connection,
-        }));
+        .nest("/users", api::user::user_routes())
+        .nest("/tasks", api::todo::task_routes())
+        .merge(api::swagger_main::build_documentation())
+        .with_state(Arc::new(SharedData { ext_cxn }));
 
     info!("Starting server.");
-    axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
-        .serve(router.into_make_service())
+    let network_listener = match TcpListener::bind(&"0.0.0.0:8080").await {
+        Ok(listener) => listener,
+        Err(bind_err) => panic!("Could not listen on requested port! {}", bind_err),
+    };
+    axum::serve(network_listener, router.into_make_service())
         .await
         .unwrap();
 }

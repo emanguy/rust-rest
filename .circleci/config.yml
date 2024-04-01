@@ -25,12 +25,15 @@ commands:
 jobs:
   build-and-test:
     docker:
-      - image: ghcr.io/emanguy/rust-ci:1.1.0
+      - image: ghcr.io/emanguy/rust-ci:1.75-v1.1.0
       - image: postgres:14-alpine
         name: test-db
         environment:
           POSTGRES_PASSWORD: sample123
     environment:
+      # This is needed for sqlx to verify queries
+      DATABASE_URL: "postgresql://postgres:sample123@test-db:5432"
+      # This is needed for the integration tests to actually connect to the database
       TEST_DB_URL: "postgresql://postgres:sample123@test-db:5432"
       DB_TABLE_URL: "postgresql://postgres:sample123@test-db:5432/postgres"
     steps:
@@ -38,24 +41,29 @@ jobs:
       - run:
           name: Provision database
           command: |
-            until psql -l $TEST_DB_URL
+            until psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL  
             do
-              echo "Waiting for database..."
+              echo "Trying again in a few seconds..."
               sleep 5
             done
-            psql -f postgres-scripts/postgres-setup.sql $DB_TABLE_URL     
+            echo "Migrations complete!"
       - rust_build
-      - run: 
+      - run:
           name: "Run tests"
           command: cargo test --features integration_test
+
   validate-quality:
     docker:
-      - image: rust:1.61
+      - image: ghcr.io/emanguy/rust-ci:1.75-v1.1.0
+    environment:
+      SQLX_OFFLINE: "true"
     steps:
       - checkout
       - rust/clippy:
-          flags: --tests --features integration_test
-      - rust/format
+          flags: --tests --features integration_test -- -D warnings
+      - run:
+          name: "Validate formatting"
+          command: cargo fmt --check
 
 workflows:
   standard:

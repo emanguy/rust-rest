@@ -1,11 +1,11 @@
 create table todo_user (
-    id serial primary key,
+    id serial primary key not null,
     first_name varchar(128) not null,
     last_name varchar(128) not null
 );
 
 create table todo_item (
-    id serial primary key,
+    id serial primary key not null,
     user_id integer not null,
     item_desc text not null,
 

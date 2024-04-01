@@ -1,14 +1,10 @@
 use axum::body::Body;
 use axum::http::{header, Method, Request, StatusCode};
 use axum::Router;
-use hyper::body;
 use tower::Service; // THIS IS REQUIRED FOR Router.call()
 
-use crate::{
-    dto::{InsertedUser, NewUser},
-    entity::TodoUser,
-    routes,
-};
+use crate::api::test_util::{deserialize_body, dto_to_body};
+use crate::{api, dto};
 
 use super::test_util;
 
@@ -17,58 +13,41 @@ fn create_user_request() -> Request<Body> {
         .method(Method::POST)
         .uri("/users")
         .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(
-            serde_json::to_string(&NewUser {
-                first_name: String::from("John"),
-                last_name: String::from("Doe"),
-            })
-            .unwrap(),
-        ))
+        .body(dto_to_body(&dto::NewUser {
+            first_name: String::from("John"),
+            last_name: String::from("Doe"),
+        }))
         .unwrap()
 }
 
 #[tokio::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_create_user() {
-    let router = Router::new().merge(routes::user_routes());
+    let router = Router::new().nest("/users", api::user::user_routes());
     let (mut app, _) = test_util::prepare_application(router).await;
     let test_req = create_user_request();
 
     let response = app.call(test_req).await.unwrap();
 
-    let status = response.status();
-    let body = body::to_bytes(response.into_body())
-        .await
-        .expect("Could not read response body");
-    assert_eq!(
-        StatusCode::CREATED,
-        status,
-        "Failed to create with response body {:?}",
-        body
-    );
+    let (res_parts, res_body) = response.into_parts();
+    assert_eq!(StatusCode::CREATED, res_parts.status);
+
+    let new_user_dto: dto::InsertedUser = deserialize_body(res_body).await;
+    assert!(new_user_dto.id > 0);
 }
 
 #[tokio::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_retrieve_user() {
-    let router = Router::new().merge(routes::user_routes());
+    let router = Router::new().nest("/users", api::user::user_routes());
     let (mut app, _) = test_util::prepare_application(router).await;
     let create_user_req = create_user_request();
 
     let create_response = app.call(create_user_req).await.unwrap();
-    let create_status = create_response.status();
-    let res_body = body::to_bytes(create_response.into_body())
-        .await
-        .expect("Could not read create user body");
-    assert_eq!(
-        StatusCode::CREATED,
-        create_status,
-        "Did not get expected status code, received response was {:?}",
-        res_body
-    );
+    let (create_parts, body) = create_response.into_parts();
+    assert_eq!(StatusCode::CREATED, create_parts.status);
 
-    let user_id = serde_json::from_slice::<InsertedUser>(&res_body)
-        .unwrap_or_else(|_| panic!("Could not parse create user response, got body {res_body:?}"));
+    let user_id: dto::InsertedUser = deserialize_body(body).await;
 
     let list_users_req = Request::builder()
         .method(Method::GET)
@@ -79,21 +58,12 @@ async fn can_retrieve_user() {
         .call(list_users_req)
         .await
         .expect("User lookup request failed");
-    let list_users_status = list_users_resp.status();
-    let res_body = body::to_bytes(list_users_resp.into_body())
-        .await
-        .expect("Could not read response from list users endpoint");
+    let (list_users_parts, lu_body) = list_users_resp.into_parts();
 
-    assert_eq!(
-        StatusCode::OK,
-        list_users_status,
-        "Got bad status code from list users endpoint, received response {:?}",
-        res_body
-    );
+    assert_eq!(StatusCode::OK, list_users_parts.status);
 
-    let received_user: Vec<TodoUser> =
-        serde_json::from_slice(&res_body).expect("Could not parse user list body");
-    let expected_user = TodoUser {
+    let received_user: Vec<dto::TodoUser> = deserialize_body(lu_body).await;
+    let expected_user = dto::TodoUser {
         id: user_id.id,
         first_name: String::from("John"),
         last_name: String::from("Doe"),
