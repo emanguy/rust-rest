@@ -22,8 +22,8 @@ pub trait ExternalConnectivity: Sync {
     async fn database_cxn(&mut self) -> Result<Self::Handle<'_>, Self::Error>;
 }
 
-/// ConnectionHandle is a handle borrowed from [ExternalConnectivity] which you can
-/// use to acquire a connection to the database
+/// ConnectionHandle is a handle borrowed from [ExternalConnectivity] which can be
+/// used to acquire a connection to the database
 pub trait ConnectionHandle {
     /// Borrow a connection from the database pool to perform a query
     fn borrow_connection(&mut self) -> &mut PgConnection;
@@ -179,7 +179,8 @@ pub mod test_util {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
-    /// A fake for ExternalConnectivity so unit tests don't actually have to connect to external systems
+    /// A fake for ExternalConnectivity so unit tests don't actually have to connect to external systems.
+    /// Also allows inspection in tests to verify a database transaction was committed
     pub struct FakeExternalConnectivity {
         is_transacting: bool,
         downstream_transaction_committed: Arc<AtomicBool>,

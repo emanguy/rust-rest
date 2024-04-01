@@ -48,7 +48,7 @@ impl From<ValidationErrors> for ValidationErrorResponse {
     }
 }
 
-/// Wrapper for [axum::Json] which customizes the error response to use our
+/// Wrapper for [axum::Json] which customizes the error response to use the template's
 /// data structure for API errors
 #[derive(FromRequest)]
 #[from_request(via(axum::Json), rejection(JsonErrorResponse))]

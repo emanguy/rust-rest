@@ -2,8 +2,8 @@
 
 In this microservice template, logging is handled via the standard [log facade](https://crates.io/crates/log),
 with [env_logger](https://crates.io/crates/env_logger) as the underlying implementation. You may log information
-at the levels provided by the facade, simply by invoking the provided macros
-`debug!()`, `info!()`, `warn!()`, or `error!()`.
+at the levels provided by the facade by invoking the provided macros
+`debug!()`, `trace!()`, `info!()`, `warn!()`, or `error!()`.
 
 ## Filtering Log Messages
 

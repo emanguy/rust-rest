@@ -61,6 +61,10 @@ Most frequently, the server responds in about 39ms and it was able to process 46
 
 The Swagger UI (provided by the [utoipa](https://github.com/juhaku/utoipa) crate) can be accessed at http://localhost:8080/swagger-ui when starting the application.
 
+## Tests
+
+Unit tests for both API routers and business logic can be run via `cargo test`.
+
 ## Integration tests
 
 Provided on this repo is a framework for integration testing. By default, the integration tests are skipped via the `#[cfg_attr()]` declaration which requires the `integration_test` feature to be enabled.

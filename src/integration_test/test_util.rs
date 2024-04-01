@@ -101,7 +101,7 @@ async fn prepare_db(pg_connection_base_url: &str) -> sqlx::PgPool {
 }
 
 /// Prepares a database-connected application for integration tests, attaching routes via the provided
-/// function reference slice. This function returns both the database pool and a prepared application instance
+/// Axum router. This function returns both the database pool and a prepared application instance
 /// which can handle requests based on the registered routes passed to the function.
 ///
 /// Expects that the [TEST_DB_URL](app_env::test::TEST_DB_URL) environment variable is populated.

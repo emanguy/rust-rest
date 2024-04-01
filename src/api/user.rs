@@ -182,7 +182,7 @@ async fn create_user(
     Ok((StatusCode::CREATED, Json(dto::InsertedUser { id: user_id })))
 }
 
-/// Handles all cases of domain errors returning [TaskError].
+/// Handles [TaskError] instances coming from business logic
 fn handle_todo_task_err(err: TaskError) -> ErrorResponse {
     match err {
         TaskError::UserDoesNotExist => (

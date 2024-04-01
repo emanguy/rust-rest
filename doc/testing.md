@@ -25,7 +25,7 @@ via an immutable reference.
 
 Normally, `mockall::automock` could be used to generate mocks for traits, but at the time of writing it doesn't work
 well for traits containing async methods. Besides, fakes make tests easier to write because they mimic the behavior
-of the real systems we try to interface with.
+of the real systems the business logic tries to interface with.
 
 The `domain::test_util` module defines a re-usable `Connectivity` enum that can be composed in fakes to simulate
 connectivity failure. When `Connectivity::Disconnected` is used, it is expected that any function on the fake will
@@ -71,7 +71,7 @@ pub mod test_util {
         }
     }
 
-    // Now we can implement the driven port interface on the fake, specifically when it's wrapped
+    // Now we can implement the driven port trait on the fake, specifically when it's wrapped
     // in the synchronization primitive
     impl driven_ports::PlayerDetector for RwLock<InMemoryPlayerPersistence> {
         async fn player_with_username_exists(
@@ -102,7 +102,7 @@ pub mod test_util {
 With the fake defined, we can use it to fake the functionality of driven ports in business logic tests. We'll define a
 simple happy path test and error test for PlayerService this way.
 
-The `external_connections::test_util` package defines a fake `ExternalConnectivity` instance we can use for testing
+The `external_connections::test_util` module defines a fake `ExternalConnectivity` instance we can use for testing
 on top of the fake we just implemented.
 
 <details>
@@ -187,7 +187,7 @@ mod tests {
 
 ## Unit Testing API Routes
 
-Testing API routes is a little more interesting because it can involve deserializing the response produced from the
+Testing API routes is a little more complex because it can involve deserializing the response produced from the
 request logic in error cases. Typically, it is sufficient to just mock the business logic to verify values it produces
 convert to expected HTTP responses.
 
@@ -197,7 +197,7 @@ for both sync and async trait implementations.
 
 ### Defining a mock with FakeImplementation
 
-Similarly to fake implementations, trait implementations for mocks should be done inside a synchronization primitive to
+Similar to fake implementations, trait implementations for mocks should be done inside a synchronization primitive to
 allow for interior mutability while using immutable references to pass around the driving port.
 
 Mocks are implemented by composing together `FakeConnectivity` instances to set return values on specific functions. It
@@ -231,7 +231,7 @@ pub mod test_util {
     }
 
     impl MockPlayerService {
-        // We'll need a constructor for it
+        // We'll need a constructor for the mock
         pub fn new() -> MockPlayerService {
             Self {
                 new_player_response: FakeImplementation::new(),
@@ -281,11 +281,11 @@ pub mod test_util {
 
 Now that we have a mock for the player service, we can force specific results from the business logic to verify every
 response from the endpoint. On happy path tests, you can easily extract the raw value from the result returned from the
-function. 
+function.
 
-For tests verifying error responses, since there are a number of different data structures that could have been
+For tests verifying error responses, there are a number of different data structures that could have been
 transformed into `ErrorResponse` for the `Err` variant of the request logic. To make it easy to verify the body of these
-error results, the `api::test_util` package provides the `deserialize_body()` helper function, which takes a raw `axum::body::Body`,
+error results, the `api::test_util` module provides the `deserialize_body()` helper function, which takes a raw `axum::body::Body`,
 turns it into a set of bytes, then deserializes it from JSON into a DTO.
 
 Speaking of DTOs, we'll need to make sure response DTOs we interact with can be deserialized. We'll walk through router
@@ -420,14 +420,14 @@ an active Postgres database.
 
 ### Running and marking integration tests
 
-Because other systems are involved with integration tests, they are disabled by default
+Because other systems are involved with integration tests, these tests are disabled by default and can be enabled
 via a Cargo feature flag called "integration_test". To run both the unit and integration tests, you'll need to start
 the database and run cargo tests, enabling the integration_test feature:
 
 1. `docker-compose up -d`
 2. `cargo test --features integration_test`
 
-Integration tests go under the `integration_test` package. In that package, integration tests can be defined like normal
+Integration tests go under the `integration_test` module. In that module, integration tests can be defined like normal
 tests, but with a `cfg_attr` annotation to exclude them from a normal `cargo test` run without the integration_test feature:
 
 ```rust
@@ -443,14 +443,15 @@ async fn sample_test() {
 
 ### Implementing the integration test
 
-The `integration_test::test_util` package defines a utility function, `prepare_application()`, which prepares an Axum 
+The `integration_test::test_util` module defines a utility function, `prepare_application()`, which prepares an Axum 
 application and a standalone schema for the active unit test, which is derived from the default schema by turning it 
 into a template and copying it. Using these utilities, you can inject test data into the database and attach necessary 
-routes to the Axum app to perform the integration test.
+routes to the Axum app to perform the integration test. It also provides an active database connection if you wish to
+inject test data during the test.
 
-You can create requests to the Axum application using `axum::http::Request::builder()` along with `serde_json`. The
-`deserialize_body()` helper from `api::test_util` can also be used to read API responses just like API tests, and
-the same package provides a `dto_to_body()` helper to help pass DTOs into the request builder for requests.
+You can create requests to the Axum application using `axum::http::Request::builder()`. The
+`deserialize_body()` helper from `api::test_util` can be used to read API responses just like API tests, and
+the same module provides a `dto_to_body()` helper to help pass DTOs into the request builder for requests.
 
 With all that being said, here's how we can write a happy path integration test for the [player create endpoint](./architecture_layers.md#the-router-function):
 
@@ -463,7 +464,7 @@ With all that being said, here's how we can write a happy path integration test 
 #[tokio::test]
 #[cfg_attr(not(feature = "integration_test"), ignore)]
 async fn can_create_player() {
-    // First off, let's use our router function from the API package to attach the player routes to a test router
+    // First off, let's use our router function from the API module to attach the player routes to a test router
     let router = Router::new().nest("/players", api::player::player_routes());
     // Next, let's use the integration test utilities to scaffold the app and a database connection.
     // We won't need the database connection here, so we can just ignore it. Preparing the application

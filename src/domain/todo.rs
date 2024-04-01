@@ -49,7 +49,7 @@ pub mod driven_ports {
         ) -> Result<Option<TodoTask>, anyhow::Error>;
     }
 
-    /// An external system that can accept new tasks for a user
+    /// An external system that can edit the set of tasks for a user
     pub trait TaskWriter {
         /// Create a new task for a user
         async fn create_task_for_user(
@@ -76,7 +76,8 @@ pub mod driven_ports {
     }
 }
 
-/// Contains the driving port interface invoked by driving adapters such as HTTP routers
+/// Contains the driving port interface that exposes business logic entrypoints to driving adapters
+/// such as HTTP routers
 pub mod driving_ports {
     use super::*;
     use crate::domain;
@@ -112,7 +113,7 @@ pub mod driving_ports {
         use crate::domain::todo::driving_ports::TaskError;
         use anyhow::anyhow;
 
-        // Implements clone for TaskError so it can be used in mocks during tests
+        // Implements clone for TaskError so it can be used in mocks during API tests
         impl Clone for TaskError {
             fn clone(&self) -> Self {
                 match self {
@@ -123,7 +124,7 @@ pub mod driving_ports {
         }
     }
 
-    /// The driving port for task activities
+    /// The driving port, or the set of business logic functions exposed to driving adapters
     pub trait TaskPort {
         /// Retrieve the set of tasks belonging to a user
         async fn tasks_for_user(

@@ -29,8 +29,11 @@ async fn can_create_user() {
 
     let response = app.call(test_req).await.unwrap();
 
-    let status = response.status();
-    assert_eq!(StatusCode::CREATED, status);
+    let (res_parts, res_body) = response.into_parts();
+    assert_eq!(StatusCode::CREATED, res_parts.status);
+
+    let new_user_dto: dto::InsertedUser = deserialize_body(res_body).await;
+    assert!(new_user_dto.id > 0);
 }
 
 #[tokio::test]

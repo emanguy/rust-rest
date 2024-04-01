@@ -2,8 +2,8 @@
 
 This template is configured via environment variables, as that is typically how microservices are configured when deployed
 with Docker. For both the ability to rename environment variables across the microservice and to track environment variable
-usage within the application, environment variable names are defined as constants in the `app_env` package. Environment
-variables used specifically in tests are defined in the `app_env::test` package. This can also be used as a way to document
+usage within the application, environment variable names are defined as constants in the `app_env` module. Environment
+variables used specifically in tests are defined in the `app_env::test` module. This can also be used as a way to document
 environment variables.
 
 Here's an example of how these environment variables might be defined:

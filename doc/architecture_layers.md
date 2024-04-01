@@ -4,9 +4,9 @@ This microservice template is built using [Hexagonal Architecture](https://mediu
 **Please read that overview before moving forward, terminology from it will be used in this document.**
 
 The app is built using the standard hexagon layout:
-* The HTTP-based driving adapters are implemented in the [API Package](../src/api/mod.rs)
-* The domain logic is implemented in the [Domain Package](../src/domain/mod.rs)
-* The driven adapters (just SQL connections for now) are implemented in the [Persistence package](../src/persistence/mod.rs)
+* The HTTP-based driving adapters are implemented in the [API Module](../src/api/mod.rs)
+* The domain logic is implemented in the [Domain Module](../src/domain/mod.rs)
+* The driven adapters (just SQL connections for now) are implemented in the [Persistence Module](../src/persistence/mod.rs)
 
 ## Layer Interactions
 
@@ -24,7 +24,7 @@ ownership of everything trickles down from the driving adapter).
 
 ### Driving adapters (HTTP routing)
 Driving adapters should handle protocol-specific details for triggering logic in the domain. This means accepting and responding
-with DTOs (Data Transfer Objects), and converting these DTOs into domain types before invoking domain functionality through
+with DTOs (Data Transfer Objects) and converting these DTOs into domain types before invoking domain functionality through
 the driving port. Conversely, when a domain type or domain error is passed back to a driving adapter, they should be converted
 into DTOs before they go over the wire. The HTTP response code should be determined based on the semantics of either a successful
 operation or the specific domain error received from the driving port.
@@ -41,7 +41,7 @@ of a transaction or via a standard database connection.
 
 ### Driven adapters (database and other external systems)
 Driven adapters should handle protocol-specific details to help facilitate the domain's communication with external systems.
-They should implement the driven port interface defined by the domain and convert domain types into DTOs (Data Transfer Objects)
+They should implement the driven port trait defined by the domain and convert domain types into DTOs (Data Transfer Objects)
 before sending data over the wire. Acquiring the connection to the outside world can be done by accepting something implementing
 the **ExternalConnectivity** trait.
 
@@ -136,7 +136,7 @@ pub mod driven_ports {
 
 #### Driving Port
 
-Once we have the driven port interface defined, we can use the driven ports as parameters in our driving port, allowing us
+Once we have the driven port trait defined, we can use the driven ports as parameters in our driving port, allowing us
 to [inject fakes during testing](./testing.md#unit-testing-business-logic). As mentioned previously, the driving adapter has ownership
 of the connections the code makes to the outside world, so we need to pass something implementing `ExternalConnectivity` into
 the driving port. We'll need to define the set of errors that can be produced from the driving port functions, too.
@@ -282,7 +282,7 @@ to the database, and only respond to the domain with domain types and errors. Th
 the business logic and the actual implementation detail of connecting to the database as an external data source. This
 decoupling allows for easy swapping of underlying implementations if need be.
 
-Note that the `persistence` package includes utilities to transform anything that implements the `Debug` and `Display` traits
+Note that the `persistence` module includes utilities to transform anything that implements the `Debug` and `Display` traits
 into an `anyhow::Error` called `anyhowify()`. There are also utilities for extracting the ID of inserted data, such as the
 `NewId` struct. Similarly, `Count` stores the output of the `count()` SQL function.
 
@@ -446,7 +446,7 @@ for a request function is:
 Because the business logic is mocked out in tests, we can actually create instances of the driven adapters inside the logic
 of the function as they won't ever be invoked.
 
-Many responses are common across various endpoints on the microservice, so canned responses are available in the `routing_utils` package.
+Many responses are common across various endpoints on the microservice, so canned responses are available in the `routing_utils` module.
 We'll use some of these for generic 500 errors and validation errors. Otherwise, [axum-compatible response types](https://docs.rs/axum/0.7.5/axum/response/index.html#building-responses) 
 should be returned from the routing logic function.
 

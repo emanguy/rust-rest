@@ -60,8 +60,8 @@ defined on the `OpenApiSchemas` empty struct at the top of `dto.rs`:
 ))]
 pub struct OpenApiSchemas;
 // ...dto definitions
-```
 
+```
 
 ## Documenting API Endpoints
 
@@ -71,7 +71,7 @@ if applicable. Each API has its own OpenAPI struct that then gets composed into 
 
 ### Adding OpenAPI information to a route logic function
 
-OpenAPI information can be added to a [request logic function](./architecture_layers.md#request-logic-function) is done
+OpenAPI information can be added to a [request logic function](./architecture_layers.md#request-logic-function)
 with the `utoipa::path` annotation. It includes information on the API group a route belongs to, request and response
 DTO information, the HTTP verb used, and more. A full description of all the options on the annotation can be found
 [in the utoipa documentation](https://docs.rs/utoipa/4.2.0/utoipa/attr.path.html).
@@ -131,13 +131,11 @@ async fn create_player(
     // ...route logic implementation
 }
 ```
-
 </details>
-
 
 ### Attaching OpenAPI route information to a router's API information
 
-Each router under the `api` package has its own set of OpenAPI definitions. The routes under that API get attached
+Each router under the `api` module has its own set of OpenAPI definitions. The routes under that API get attached
 to the definitions under that router so they can be joined to the main OpenAPI spec for the microservice.
 
 As long as your route logic functions are decorated with `utoipa::path`, they can be added to the OpenAPI schema
@@ -184,8 +182,10 @@ pub fn build_documentation() -> SwaggerUi {
 
 In some cases, the same common error response may be returned across multiple different API endpoints. Rather than needing
 to redefine the entire response every time that response is used, you can define a canned error response in the `dto::err_resps`
-package. For these, rather than deriving `ToSchema`, you derive `ToResponse`. In doing so you include a response description
+module. For these, rather than deriving `ToSchema`, you derive `ToResponse`. In doing so you include a response description
 and example value that can be reused across multiple API endpoints. The response is then added to `OpenApiSchemas` like a DTO.
+Note that a canned response must contain a type implementing `ToSchema` which describes the response body before `ToResponse`
+can be derived. 
 
 Here's how you might define one:
 
@@ -201,7 +201,7 @@ pub mod err_resps {
     // The type that derives this trait must contain a schema, which is the schema used
     // for the canned response body.
     //
-    // In the response annotation, we describe the canned response and provide an example value
+    // In the response annotation, we describe the canned response and provide an example response body
     #[derive(ToResponse)]
     #[response(
         description = "Conflicting data already exists in the system",

@@ -18,7 +18,7 @@ pub struct TaskApi;
 /// Constant used to group task endpoints in OpenAPI documentation
 pub const TASK_API_GROUP: &str = "Tasks";
 
-/// Adds routes under "/tasks" and routes for user-owned tasks to the application router
+/// Creates a router for endpoints under the "/tasks" group of APIs
 pub fn task_routes() -> Router<Arc<SharedData>> {
     Router::new().route(
         "/:task_id",

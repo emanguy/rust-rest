@@ -25,6 +25,7 @@ use validator::{Validate, ValidationErrors};
         err_resps::BasicError500,
     ),
 ))]
+/// Captures OpenAPI schemas and canned responses defined in the DTO module
 pub struct OpenApiSchemas;
 
 /// DTO for a constructed user
@@ -129,9 +130,13 @@ pub struct InsertedTask {
 #[derive(Serialize, Debug, ToSchema)]
 #[cfg_attr(test, derive(Deserialize))]
 pub struct BasicError {
+    /// A sentinel value that can be used to differentiate between different causes of a non-2XX
+    /// HTTP response code
     pub error_code: String,
+    /// A human-readable error message suitable for showing to users
     pub error_description: String,
 
+    /// Additional contextual information, such as what validations failed on a request DTO
     #[serde(skip_deserializing)]
     pub extra_info: Option<ExtraInfo>,
 }

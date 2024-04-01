@@ -11,7 +11,7 @@ use sqlx::{Acquire, PgConnection, PgPool, Postgres, Transaction};
 
 /// Data structure which owns clients for connecting to external systems.
 /// Allows business logic to be agnostic of the external systems it communicates with
-/// so driven ports can easily be swapped out for other implementations
+/// so driven adapters can easily be swapped out for other implementations
 #[derive(Clone)]
 pub struct ExternalConnectivity {
     db: PgPool,

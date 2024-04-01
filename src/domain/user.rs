@@ -42,7 +42,7 @@ pub mod driven_ports {
         ) -> Result<i32, anyhow::Error>;
     }
 
-    /// Contains a description of a user's personal information
+    /// Contains a description of a user's unique personal information
     pub struct UserDescription<'names> {
         pub first_name: &'names str,
         pub last_name: &'names str,
@@ -87,7 +87,7 @@ pub mod driving_ports {
         PortError(#[from] anyhow::Error),
     }
 
-    /// The driving port which triggers business logic involving users
+    /// The driving port which exposes business logic involving users to driving adapters
     pub trait UserPort {
         /// Retrieve the set of users in the system
         async fn get_users(
