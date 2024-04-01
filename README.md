@@ -5,7 +5,7 @@ This repository contains a starting point for a testable Rust microservice using
 1. Run `docker compose up` to start the PostgeSQL server that the microservice depends on.
 2. Run `cargo run` to start the microservice.
 
-Additional documentation and "getting started" material can be found in the [template documentation](./doc/README).
+Additional documentation and "getting started" material can be found in the [template documentation](./doc/README.md).
 
 ## Benchmark
 
