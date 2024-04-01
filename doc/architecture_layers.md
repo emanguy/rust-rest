@@ -137,7 +137,7 @@ pub mod driven_ports {
 #### Driving Port
 
 Once we have the driven port interface defined, we can use the driven ports as parameters in our driving port, allowing us
-to inject fakes during testing (TODO: ADD LINK TO TESTING DOCS HERE). As mentioned previously, the driving adapter has ownership
+to [inject fakes during testing](./testing.md#unit-testing-business-logic). As mentioned previously, the driving adapter has ownership
 of the connections the code makes to the outside world, so we need to pass something implementing `ExternalConnectivity` into
 the driving port. We'll need to define the set of errors that can be produced from the driving port functions, too.
 
