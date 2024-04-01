@@ -13,7 +13,9 @@ use validator::Validate;
 
 #[derive(OpenApi)]
 #[openapi(paths(update_task, delete_task,))]
+/// Defines the OpenAPI documentation for the tasks API
 pub struct TaskApi;
+/// Constant used to group task endpoints in OpenAPI documentation
 pub const TASK_API_GROUP: &str = "Tasks";
 
 /// Adds routes under "/tasks" and routes for user-owned tasks to the application router

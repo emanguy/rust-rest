@@ -4,7 +4,9 @@ use crate::domain::user::driven_ports::UserDescription;
 use crate::domain::user::{CreateUser, TodoUser};
 use crate::external_connections::{ConnectionHandle, ExternalConnectivity};
 use sqlx::query_as;
+use anyhow::Context;
 
+/// A database-based driven adapter for detecting the presence of existing users
 pub struct DbDetectUser;
 
 impl domain::user::driven_ports::DetectUser for DbDetectUser {
@@ -48,8 +50,10 @@ impl domain::user::driven_ports::DetectUser for DbDetectUser {
     }
 }
 
+/// A database-based driven adapter for reading existing user data
 pub struct DbReadUsers;
 
+/// A database DTO containing user data
 struct TodoUserRow {
     id: i32,
     first_name: String,
@@ -67,7 +71,7 @@ impl From<TodoUserRow> for TodoUser {
 }
 
 impl domain::user::driven_ports::UserReader for DbReadUsers {
-    async fn get_all(
+    async fn all(
         &self,
         ext_cxn: &mut impl ExternalConnectivity,
     ) -> Result<Vec<TodoUser>, anyhow::Error> {
@@ -84,7 +88,7 @@ impl domain::user::driven_ports::UserReader for DbReadUsers {
         Ok(users)
     }
 
-    async fn get_by_id(
+    async fn by_id(
         &self,
         id: i32,
         ext_cxn: &mut impl ExternalConnectivity,
@@ -104,6 +108,7 @@ impl domain::user::driven_ports::UserReader for DbReadUsers {
     }
 }
 
+/// A database-based driven adapter for writing new users into the database
 pub struct DbWriteUsers;
 
 impl domain::user::driven_ports::UserWriter for DbWriteUsers {

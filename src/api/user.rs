@@ -22,8 +22,10 @@ use validator::Validate;
     get_task_for_user,
     add_task_for_user,
 ))]
+/// Defines the OpenAPI spec for user endpoints
 pub struct UsersApi;
 
+/// Used to group user endpoints together in the OpenAPI documentation
 pub const USER_API_GROUP: &str = "Users";
 
 /// Builds a router for all the user routes
@@ -245,6 +247,7 @@ async fn get_tasks_for_user(
     Ok(Json(tasks))
 }
 
+/// Captures path variables from the "get task" endpoint
 #[derive(Deserialize)]
 struct GetTaskPath {
     user_id: i32,

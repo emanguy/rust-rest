@@ -7,6 +7,7 @@ use log::error;
 
 #[derive(PartialEq, Eq, Debug)]
 #[cfg_attr(test, derive(Clone))]
+/// A task available for a user
 pub struct TodoTask {
     pub id: i32,
     pub owner_user_id: i32,
@@ -14,25 +15,32 @@ pub struct TodoTask {
 }
 
 #[cfg_attr(test, derive(Clone))]
+/// Contains information necessary to create a new task
 pub struct NewTask {
     pub description: String,
 }
 
 #[cfg_attr(test, derive(Clone))]
+/// Contains information which is allowed to be updated on a task
 pub struct UpdateTask {
     pub description: String,
 }
 
+/// Contains the set of driven ports invoked by the business logic
 pub mod driven_ports {
     use super::*;
     use crate::external_connections::ExternalConnectivity;
 
+    /// An external system that can read a user's tasks
     pub trait TaskReader {
+        /// Retrieve the set of tasks for a user
         async fn tasks_for_user(
             &self,
             user_id: i32,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<Vec<TodoTask>, anyhow::Error>;
+        
+        /// Retrieve a single task belonging to a user
         async fn user_task_by_id(
             &self,
             user_id: i32,
@@ -41,7 +49,9 @@ pub mod driven_ports {
         ) -> Result<Option<TodoTask>, anyhow::Error>;
     }
 
+    /// An external system that can accept new tasks for a user
     pub trait TaskWriter {
+        /// Create a new task for a user
         async fn create_task_for_user(
             &self,
             user_id: i32,
@@ -49,12 +59,14 @@ pub mod driven_ports {
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<i32, anyhow::Error>;
 
+        /// Delete a task by its ID
         async fn delete_task(
             &self,
             task_id: i32,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<(), anyhow::Error>;
 
+        /// Update the content of an existing task
         async fn update_task(
             &self,
             task_id: i32,
@@ -64,13 +76,15 @@ pub mod driven_ports {
     }
 }
 
+/// Contains the driving port interface invoked by driving adapters such as HTTP routers
 pub mod driving_ports {
     use super::*;
     use crate::domain;
     use crate::external_connections::ExternalConnectivity;
     use thiserror::Error;
-
+    
     #[derive(Debug, Error)]
+    /// A set of things that can go wrong while dealing with tasks
     pub enum TaskError {
         #[error("The specified user did not exist.")]
         UserDoesNotExist,
@@ -98,6 +112,7 @@ pub mod driving_ports {
         use crate::domain::todo::driving_ports::TaskError;
         use anyhow::anyhow;
 
+        // Implements clone for TaskError so it can be used in mocks during tests
         impl Clone for TaskError {
             fn clone(&self) -> Self {
                 match self {
@@ -108,7 +123,9 @@ pub mod driving_ports {
         }
     }
 
+    /// The driving port for task activities
     pub trait TaskPort {
+        /// Retrieve the set of tasks belonging to a user
         async fn tasks_for_user(
             &self,
             user_id: i32,
@@ -116,6 +133,8 @@ pub mod driving_ports {
             u_detect: &impl domain::user::driven_ports::DetectUser,
             task_read: &impl driven_ports::TaskReader,
         ) -> Result<Vec<TodoTask>, TaskError>;
+        
+        /// Retrieve a single task belonging to a user
         async fn user_task_by_id(
             &self,
             user_id: i32,
@@ -124,6 +143,8 @@ pub mod driving_ports {
             u_detect: &impl domain::user::driven_ports::DetectUser,
             task_read: &impl driven_ports::TaskReader,
         ) -> Result<Option<TodoTask>, TaskError>;
+        
+        /// Create a new task for a user
         async fn create_task_for_user(
             &self,
             user_id: i32,
@@ -132,12 +153,16 @@ pub mod driving_ports {
             u_detect: &impl domain::user::driven_ports::DetectUser,
             task_write: &impl driven_ports::TaskWriter,
         ) -> Result<i32, TaskError>;
+        
+        /// Delete a task by its ID
         async fn delete_task(
             &self,
             task_id: i32,
             ext_cxn: &mut impl ExternalConnectivity,
             task_write: &impl driven_ports::TaskWriter,
         ) -> Result<(), anyhow::Error>;
+        
+        /// Update the content of an existing task
         async fn update_task(
             &self,
             task_id: i32,
@@ -148,6 +173,8 @@ pub mod driving_ports {
     }
 }
 
+/// TaskService implements the driving port for tasks so driving adapters can access task business
+/// logic
 pub struct TaskService;
 
 impl driving_ports::TaskPort for TaskService {
@@ -575,18 +602,22 @@ pub mod test_util {
     use crate::domain::user::driven_ports::DetectUser;
     use std::sync::{Mutex, RwLock};
 
+    /// A fake providing task functionality for domain logic tests, as it implements
+    /// the traits for all task driven ports
     pub struct InMemoryUserTaskPersistence {
         pub tasks: Vec<TodoTask>,
         pub connected: Connectivity,
         highest_task_id: i32,
     }
 
+    /// Represents a task with a specific owner
     pub struct NewTaskWithOwner {
         pub owner: i32,
         pub task: NewTask,
     }
 
     impl InMemoryUserTaskPersistence {
+        /// Constructor for InMemoryUserTaskPersistence
         pub fn new() -> InMemoryUserTaskPersistence {
             InMemoryUserTaskPersistence {
                 tasks: Vec::new(),
@@ -595,6 +626,7 @@ pub mod test_util {
             }
         }
 
+        /// Constructor for InMemoryUserTaskPersistence which adds a set of already-existing tasks
         pub fn new_with_tasks(tasks: &[NewTaskWithOwner]) -> InMemoryUserTaskPersistence {
             InMemoryUserTaskPersistence {
                 tasks: tasks
@@ -611,6 +643,8 @@ pub mod test_util {
             }
         }
 
+        /// Constructor for InMemoryUserTaskPersistence which wraps it in an RwLock right away
+        /// for use as the set of task driven ports
         pub fn new_locked() -> RwLock<InMemoryUserTaskPersistence> {
             RwLock::new(Self::new())
         }
@@ -721,6 +755,7 @@ pub mod test_util {
         }
     }
 
+    /// Creates a new [TodoTask] from a create payload plus some supplemental information
     pub fn task_from_create(user_id: i32, task_id: i32, new_task: &NewTask) -> TodoTask {
         TodoTask {
             id: task_id,
@@ -729,6 +764,7 @@ pub mod test_util {
         }
     }
 
+    /// A mock of TaskService for use in API tests
     pub struct MockTaskService {
         pub tasks_for_user_result: FakeImplementation<i32, Result<Vec<TodoTask>, TaskError>>,
         pub user_task_by_id_result:
@@ -739,6 +775,7 @@ pub mod test_util {
     }
 
     impl MockTaskService {
+        /// Constructor for MockTaskService
         pub fn new() -> MockTaskService {
             MockTaskService {
                 tasks_for_user_result: FakeImplementation::new(),
@@ -749,6 +786,9 @@ pub mod test_util {
             }
         }
 
+        /// Constructor for MockTaskService which accepts a builder function to configure
+        /// mock responses, wrapping the resulting mock in a mutex so it is ready for use
+        /// in API tests
         pub fn build_locked(builder: impl FnOnce(&mut Self)) -> Mutex<MockTaskService> {
             let mut new_svc = Self::new();
             builder(&mut new_svc);

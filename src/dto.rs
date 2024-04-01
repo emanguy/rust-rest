@@ -118,6 +118,7 @@ impl From<UpdateTask> for domain::todo::UpdateTask {
     }
 }
 
+/// DTO for a newly created task
 #[derive(Serialize, ToSchema)]
 pub struct InsertedTask {
     #[schema(example = 5)]
@@ -176,8 +177,8 @@ pub mod err_resps {
 
     #[derive(ToResponse)]
     #[response(
-    description = "Something unexpected went wrong inside the server",
-    example = json!({
+        description = "Something unexpected went wrong inside the server",
+        example = json!({
             "error_code": "internal_error",
             "error_description": "Could not access data to complete your request",
             "extra_info": null
@@ -186,6 +187,7 @@ pub mod err_resps {
     pub struct BasicError500(BasicError);
 }
 
+/// Extra contextual information which explains why an API error occurred
 #[derive(Serialize, Debug, ToSchema)]
 #[serde(untagged)]
 pub enum ExtraInfo {

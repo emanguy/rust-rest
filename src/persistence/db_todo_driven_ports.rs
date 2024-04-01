@@ -4,8 +4,10 @@ use crate::external_connections::{ConnectionHandle, ExternalConnectivity};
 use anyhow::{Context, Error};
 use sqlx::{query, query_as};
 
+/// A database-based driven adapter for reading tasks
 pub struct DbTaskReader;
 
+/// DTO containing information about a to-do item from the database
 struct TodoItemRow {
     id: i32,
     user_id: i32,
@@ -68,6 +70,7 @@ impl domain::todo::driven_ports::TaskReader for DbTaskReader {
     }
 }
 
+/// A database-based driven adapter for writing new tasks
 pub struct DbTaskWriter;
 
 impl domain::todo::driven_ports::TaskWriter for DbTaskWriter {

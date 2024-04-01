@@ -9,17 +9,23 @@ use std::fmt::{Debug, Display};
 use sqlx::pool::PoolConnection;
 use sqlx::{Acquire, PgConnection, PgPool, Postgres, Transaction};
 
+/// Data structure which owns clients for connecting to external systems.
+/// Allows business logic to be agnostic of the external systems it communicates with
+/// so driven ports can easily be swapped out for other implementations
 #[derive(Clone)]
 pub struct ExternalConnectivity {
     db: PgPool,
 }
 
 impl ExternalConnectivity {
+    /// Accepts the set of clients used to connect to external systems and constructs
+    /// an instance of ExternalConnectivity owning those clients
     pub fn new(db: PgPool) -> Self {
         ExternalConnectivity { db }
     }
 }
 
+/// A handle from ExternalConnectivity which can connect to a database
 pub struct PoolConnectionHandle {
     active_connection: PoolConnection<Postgres>,
 }
@@ -58,10 +64,13 @@ impl external_connections::Transactable for ExternalConnectivity {
     }
 }
 
+/// A variant of ExternalConnectivity where the database client has an active database transaction
+/// which can later be committed
 pub struct ExternalConnectionsInTransaction<'tx> {
     txn: Transaction<'tx, Postgres>,
 }
 
+/// A handle from ExternalConnectionsInTransaction which can connect to a database
 pub struct TransactionHandle<'tx> {
     active_transaction: &'tx mut PgConnection,
 }
@@ -102,21 +111,25 @@ impl<'tx> external_connections::TransactionHandle for ExternalConnectionsInTrans
     }
 }
 
+/// Utility DTO for consuming the output of the PostgreSQL `count()` function
 struct Count {
     count: Option<i64>,
 }
 
 impl Count {
+    /// Retrieve the count value, as it's typechecked to be optional but should always be present
     fn count(&self) -> i64 {
         self.count
             .expect("count() should always produce at least one row")
     }
 }
 
+/// Utility DTO for retrieving the ID of a newly inserted record to PostgreSQL
 struct NewId {
     id: i32,
 }
 
+/// Converts anything implementing Debug and Display into an [anyhow::Error]
 fn anyhowify<T: Debug + Display>(errorish: T) -> anyhow::Error {
     anyhow!(format!("{}", errorish))
 }

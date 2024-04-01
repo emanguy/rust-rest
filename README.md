@@ -70,4 +70,4 @@ docker-compose up -d
 cargo test --features integration_test
 ```
 
-More information on integration testing can be found in the [testing documentation](./doc/testing.md).
+More information on integration testing can be found in the [testing documentation](./doc/testing.md#writing-integration-tests).

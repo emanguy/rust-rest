@@ -5,29 +5,36 @@ use anyhow::Context;
 
 #[derive(PartialEq, Eq, Debug, Default)]
 #[cfg_attr(test, derive(Clone))]
+/// A user who can own to-do items
 pub struct TodoUser {
     pub id: i32,
     pub first_name: String,
     pub last_name: String,
 }
 
+/// The set of driven ports that can be invoked by the business logic
 pub mod driven_ports {
     use super::*;
     use crate::external_connections::ExternalConnectivity;
 
+    /// An external system which can read user data
     pub trait UserReader: Sync {
-        async fn get_all(
+        /// Retrieve all users in the system
+        async fn all(
             &self,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<Vec<TodoUser>, anyhow::Error>;
-        async fn get_by_id(
+        /// Retrieve a specific user in the system
+        async fn by_id(
             &self,
             id: i32,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<Option<TodoUser>, anyhow::Error>;
     }
 
+    /// An external system which can accept new user data
     pub trait UserWriter: Sync {
+        /// Create a new user
         async fn create_user(
             &self,
             user: &CreateUser,
@@ -35,18 +42,22 @@ pub mod driven_ports {
         ) -> Result<i32, anyhow::Error>;
     }
 
+    /// Contains a description of a user's personal information
     pub struct UserDescription<'names> {
         pub first_name: &'names str,
         pub last_name: &'names str,
     }
 
+    /// An external system which can report the presence of a user with specific criteria
     pub trait DetectUser: Sync {
+        /// Returns true if a user with the given ID already exists
         async fn user_exists(
             &self,
             user_id: i32,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<bool, anyhow::Error>;
-
+        
+        /// Returns true if a user with the given description already exists
         async fn user_with_name_exists<'strings>(
             &self,
             description: UserDescription<'strings>,
@@ -56,16 +67,19 @@ pub mod driven_ports {
 }
 
 #[cfg_attr(test, derive(Clone))]
+/// Contains information necessary to create a new user
 pub struct CreateUser {
     pub first_name: String,
     pub last_name: String,
 }
 
+/// Contains the set of driving ports for invoking business logic involving users
 pub mod driving_ports {
     use super::*;
     use crate::external_connections::ExternalConnectivity;
 
     #[derive(Debug, Error)]
+    /// Defines the set of reasons why a user would fail to be created
     pub enum CreateUserError {
         #[error("The provided user already exists.")]
         UserAlreadyExists,
@@ -73,12 +87,16 @@ pub mod driving_ports {
         PortError(#[from] anyhow::Error),
     }
 
+    /// The driving port which triggers business logic involving users
     pub trait UserPort {
+        /// Retrieve the set of users in the system
         async fn get_users(
             &self,
             ext_cxn: &mut impl ExternalConnectivity,
             u_reader: &impl driven_ports::UserReader,
         ) -> Result<Vec<TodoUser>, anyhow::Error>;
+        
+        /// Create a new user who can be responsible for to-do items
         async fn create_user(
             &self,
             new_user: &CreateUser,
@@ -93,6 +111,7 @@ pub mod driving_ports {
         use crate::domain::user::driving_ports::CreateUserError;
         use anyhow::anyhow;
 
+        // Implements clone for CreateUserInfo in tests so the error type can be used with mocks
         impl Clone for CreateUserError {
             fn clone(&self) -> Self {
                 match self {
@@ -106,9 +125,11 @@ pub mod driving_ports {
     }
 }
 
+/// Implementation of the driving port which allows driving adapters to access user business logic
 pub struct UserService;
 
 #[derive(Debug, Error)]
+/// Error which expresses problems that may occur when asserting a user exists
 pub(super) enum UserExistsErr {
     #[error("user with ID {0} does not exist")]
     UserDoesNotExist(i32),
@@ -117,6 +138,7 @@ pub(super) enum UserExistsErr {
     PortError(#[from] anyhow::Error),
 }
 
+/// Asserts that a user already exists in the system, returning an error if not
 pub(super) async fn verify_user_exists(
     id: i32,
     external_cxn: &mut impl ExternalConnectivity,
@@ -137,7 +159,7 @@ impl driving_ports::UserPort for UserService {
         ext_cxn: &mut impl ExternalConnectivity,
         u_reader: &impl driven_ports::UserReader,
     ) -> Result<Vec<TodoUser>, anyhow::Error> {
-        let all_users_result = u_reader.get_all(ext_cxn).await;
+        let all_users_result = u_reader.all(ext_cxn).await;
         if let Err(ref port_err) = all_users_result {
             log::error!("User fetch failure: {port_err}");
         }
@@ -378,6 +400,7 @@ pub mod test_util {
     use crate::domain::user::driving_ports::UserPort;
     use std::sync::{Mutex, RwLock};
 
+    /// A fake of driven ports for user data
     pub struct InMemoryUserPersistence {
         highest_user_id: i32,
         pub created_users: Vec<TodoUser>,
@@ -385,6 +408,7 @@ pub mod test_util {
     }
 
     impl InMemoryUserPersistence {
+        /// Constructor for InMemoryUserPersistence
         pub fn new() -> InMemoryUserPersistence {
             InMemoryUserPersistence {
                 highest_user_id: 0,
@@ -393,6 +417,8 @@ pub mod test_util {
             }
         }
 
+        /// Constructor for InMemoryUserPersistence that adds a set of already-existing users
+        /// to the fake
         pub fn new_with_users(users: &[CreateUser]) -> InMemoryUserPersistence {
             InMemoryUserPersistence {
                 highest_user_id: users.len() as i32,
@@ -409,6 +435,8 @@ pub mod test_util {
             }
         }
 
+        /// Constructor for InMemoryUserPersistence which wraps it in an RwLock so it
+        /// can be immediately used as driven ports in domain logic tests
         pub fn new_locked() -> RwLock<InMemoryUserPersistence> {
             RwLock::new(InMemoryUserPersistence::new())
         }
@@ -436,7 +464,7 @@ pub mod test_util {
     }
 
     impl driven_ports::UserReader for RwLock<InMemoryUserPersistence> {
-        async fn get_all(
+        async fn all(
             &self,
             _: &mut impl ExternalConnectivity,
         ) -> Result<Vec<TodoUser>, anyhow::Error> {
@@ -454,7 +482,7 @@ pub mod test_util {
                 .collect())
         }
 
-        async fn get_by_id(
+        async fn by_id(
             &self,
             id: i32,
             _: &mut impl ExternalConnectivity,
@@ -474,17 +502,12 @@ pub mod test_util {
         }
     }
 
+    /// Creates a new CreateUser payload
     pub fn user_create_default() -> CreateUser {
         CreateUser {
             first_name: "First".into(),
             last_name: "Last".into(),
         }
-    }
-
-    #[derive(Eq, PartialEq, Hash)]
-    struct UserEntry {
-        first_name: String,
-        last_name: String,
     }
 
     impl DetectUser for RwLock<InMemoryUserPersistence> {
@@ -513,12 +536,14 @@ pub mod test_util {
         }
     }
 
+    /// A mock of UserService for use in API tests
     pub struct MockUserService {
         pub get_users_response: FakeImplementation<(), Result<Vec<TodoUser>, Error>>,
         pub create_user_response: FakeImplementation<CreateUser, Result<i32, CreateUserError>>,
     }
 
     impl MockUserService {
+        /// Constructor for MockUserService
         pub fn new() -> MockUserService {
             MockUserService {
                 get_users_response: FakeImplementation::new(),
@@ -526,16 +551,14 @@ pub mod test_util {
             }
         }
 
+        /// Constructs a new MockUserService, allowing for configuration of mocks
+        /// in the builder function before the mock is wrapped in a Mutex for use
+        /// in API tests
         pub fn build_locked(builder: impl FnOnce(&mut Self)) -> Mutex<Self> {
             let mut new_svc = Self::new();
             builder(&mut new_svc);
 
             Mutex::new(new_svc)
-        }
-
-        #[allow(dead_code)]
-        pub fn new_locked() -> Mutex<MockUserService> {
-            Mutex::new(Self::new())
         }
     }
 

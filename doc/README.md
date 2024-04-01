@@ -15,3 +15,4 @@ This template has a MSRV of Rust 1.75, as it requires official async-function-in
 3. [Testing](./testing.md)
 4. [Database connectivity](./database.md)
 5. [Documenting the API](./api_documentation.md)
+6. [Configuration](./configuration.md)

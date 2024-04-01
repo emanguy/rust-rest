@@ -179,12 +179,14 @@ pub mod test_util {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
 
+    /// A fake for ExternalConnectivity so unit tests don't actually have to connect to external systems
     pub struct FakeExternalConnectivity {
         is_transacting: bool,
         downstream_transaction_committed: Arc<AtomicBool>,
     }
 
     impl FakeExternalConnectivity {
+        /// Constructor for FakeExternalConnectivity
         pub fn new() -> Self {
             Self {
                 is_transacting: false,
@@ -192,19 +194,21 @@ pub mod test_util {
             }
         }
 
+        /// Returns true if a database transaction is active
         #[allow(dead_code)]
         pub fn is_transacting(&self) -> bool {
             self.is_transacting
         }
 
+        /// Returns true if there was a database transaction which successfully committed
         pub fn did_transaction_commit(&self) -> bool {
             self.downstream_transaction_committed.load(Ordering::SeqCst)
         }
     }
 
+    /// A fake database connection handle which panics if code tries to acquire
+    /// a real database connection
     pub struct MockHandle {}
-
-    // TODO implement ConnectionHandle for MockHandle then return a MockHandle from database_cxn
 
     impl ConnectionHandle for MockHandle {
         fn borrow_connection(&mut self) -> &mut PgConnection {

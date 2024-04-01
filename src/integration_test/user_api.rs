@@ -1,28 +1,29 @@
-use axum::body::{self, Body};
+use axum::body::Body;
 use axum::http::{header, Method, Request, StatusCode};
 use axum::Router;
 use tower::Service; // THIS IS REQUIRED FOR Router.call()
 
 use crate::{
     api, dto,
-    dto::{InsertedUser, NewUser},
 };
+use crate::api::test_util::{deserialize_body, dto_to_body};
 
 use super::test_util;
+
 
 fn create_user_request() -> Request<Body> {
     Request::builder()
         .method(Method::POST)
         .uri("/users")
         .header(header::CONTENT_TYPE, "application/json")
-        .body(Body::from(
-            serde_json::to_string(&NewUser {
-                first_name: String::from("John"),
-                last_name: String::from("Doe"),
-            })
-            .unwrap(),
-        ))
-        .unwrap()
+        .body(
+            dto_to_body(
+                &dto::NewUser {
+                    first_name: String::from("John"),
+                    last_name: String::from("Doe"),
+                }
+            )
+        ).unwrap()
 }
 
 #[tokio::test]
@@ -34,16 +35,8 @@ async fn can_create_user() {
 
     let response = app.call(test_req).await.unwrap();
 
-    let (parts, body) = response.into_parts();
-    let body = body::to_bytes(body, usize::MAX)
-        .await
-        .expect("Could not read response body");
-    assert_eq!(
-        StatusCode::CREATED,
-        parts.status,
-        "Failed to create with response body {:?}",
-        body
-    );
+    let status = response.status();
+    assert_eq!(StatusCode::CREATED, status);
 }
 
 #[tokio::test]
@@ -55,18 +48,9 @@ async fn can_retrieve_user() {
 
     let create_response = app.call(create_user_req).await.unwrap();
     let (create_parts, body) = create_response.into_parts();
-    let res_body = body::to_bytes(body, usize::MAX)
-        .await
-        .expect("Could not read create user body");
-    assert_eq!(
-        StatusCode::CREATED,
-        create_parts.status,
-        "Did not get expected status code, received response was {:?}",
-        res_body
-    );
+    assert_eq!(StatusCode::CREATED, create_parts.status);
 
-    let user_id = serde_json::from_slice::<InsertedUser>(&res_body)
-        .unwrap_or_else(|_| panic!("Could not parse create user response, got body {res_body:?}"));
+    let user_id: dto::InsertedUser = deserialize_body(body).await;
 
     let list_users_req = Request::builder()
         .method(Method::GET)
@@ -78,19 +62,10 @@ async fn can_retrieve_user() {
         .await
         .expect("User lookup request failed");
     let (list_users_parts, lu_body) = list_users_resp.into_parts();
-    let res_body = body::to_bytes(lu_body, usize::MAX)
-        .await
-        .expect("Could not read response from list users endpoint");
 
-    assert_eq!(
-        StatusCode::OK,
-        list_users_parts.status,
-        "Got bad status code from list users endpoint, received response {:?}",
-        res_body
-    );
+    assert_eq!(StatusCode::OK, list_users_parts.status);
 
-    let received_user: Vec<dto::TodoUser> =
-        serde_json::from_slice(&res_body).expect("Could not parse user list body");
+    let received_user: Vec<dto::TodoUser> = deserialize_body(lu_body).await;
     let expected_user = dto::TodoUser {
         id: user_id.id,
         first_name: String::from("John"),

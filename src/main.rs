@@ -32,10 +32,12 @@ pub fn configure_logger() {
         .init();
 }
 
+/// Global data store which is shared among HTTP routes
 pub struct SharedData {
     pub ext_cxn: persistence::ExternalConnectivity,
 }
 
+/// Type alias for the extractor used to get access to the global app state
 type AppState = State<Arc<SharedData>>;
 
 #[tokio::main]
