@@ -3,8 +3,8 @@ use crate::domain;
 use crate::domain::user::driven_ports::UserDescription;
 use crate::domain::user::{CreateUser, TodoUser};
 use crate::external_connections::{ConnectionHandle, ExternalConnectivity};
-use sqlx::query_as;
 use anyhow::Context;
+use sqlx::query_as;
 
 /// A database-based driven adapter for detecting the presence of existing users
 pub struct DbDetectUser;

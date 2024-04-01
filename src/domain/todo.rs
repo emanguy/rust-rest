@@ -39,7 +39,7 @@ pub mod driven_ports {
             user_id: i32,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<Vec<TodoTask>, anyhow::Error>;
-        
+
         /// Retrieve a single task belonging to a user
         async fn user_task_by_id(
             &self,
@@ -82,7 +82,7 @@ pub mod driving_ports {
     use crate::domain;
     use crate::external_connections::ExternalConnectivity;
     use thiserror::Error;
-    
+
     #[derive(Debug, Error)]
     /// A set of things that can go wrong while dealing with tasks
     pub enum TaskError {
@@ -133,7 +133,7 @@ pub mod driving_ports {
             u_detect: &impl domain::user::driven_ports::DetectUser,
             task_read: &impl driven_ports::TaskReader,
         ) -> Result<Vec<TodoTask>, TaskError>;
-        
+
         /// Retrieve a single task belonging to a user
         async fn user_task_by_id(
             &self,
@@ -143,7 +143,7 @@ pub mod driving_ports {
             u_detect: &impl domain::user::driven_ports::DetectUser,
             task_read: &impl driven_ports::TaskReader,
         ) -> Result<Option<TodoTask>, TaskError>;
-        
+
         /// Create a new task for a user
         async fn create_task_for_user(
             &self,
@@ -153,7 +153,7 @@ pub mod driving_ports {
             u_detect: &impl domain::user::driven_ports::DetectUser,
             task_write: &impl driven_ports::TaskWriter,
         ) -> Result<i32, TaskError>;
-        
+
         /// Delete a task by its ID
         async fn delete_task(
             &self,
@@ -161,7 +161,7 @@ pub mod driving_ports {
             ext_cxn: &mut impl ExternalConnectivity,
             task_write: &impl driven_ports::TaskWriter,
         ) -> Result<(), anyhow::Error>;
-        
+
         /// Update the content of an existing task
         async fn update_task(
             &self,

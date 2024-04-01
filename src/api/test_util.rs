@@ -19,7 +19,5 @@ pub async fn deserialize_body<T: DeserializeOwned>(response_body: body::Body) ->
 
 /// Converts a request DTO into an Axum body for a request
 pub fn dto_to_body<T: Serialize>(request_body: &T) -> body::Body {
-    body::Body::from(
-        serde_json::to_string(request_body).expect("Could not serialize request body")
-    )
+    body::Body::from(serde_json::to_string(request_body).expect("Could not serialize request body"))
 }

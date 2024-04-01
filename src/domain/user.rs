@@ -56,7 +56,7 @@ pub mod driven_ports {
             user_id: i32,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<bool, anyhow::Error>;
-        
+
         /// Returns true if a user with the given description already exists
         async fn user_with_name_exists<'strings>(
             &self,
@@ -95,7 +95,7 @@ pub mod driving_ports {
             ext_cxn: &mut impl ExternalConnectivity,
             u_reader: &impl driven_ports::UserReader,
         ) -> Result<Vec<TodoUser>, anyhow::Error>;
-        
+
         /// Create a new user who can be responsible for to-do items
         async fn create_user(
             &self,

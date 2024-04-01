@@ -3,27 +3,21 @@ use axum::http::{header, Method, Request, StatusCode};
 use axum::Router;
 use tower::Service; // THIS IS REQUIRED FOR Router.call()
 
-use crate::{
-    api, dto,
-};
 use crate::api::test_util::{deserialize_body, dto_to_body};
+use crate::{api, dto};
 
 use super::test_util;
-
 
 fn create_user_request() -> Request<Body> {
     Request::builder()
         .method(Method::POST)
         .uri("/users")
         .header(header::CONTENT_TYPE, "application/json")
-        .body(
-            dto_to_body(
-                &dto::NewUser {
-                    first_name: String::from("John"),
-                    last_name: String::from("Doe"),
-                }
-            )
-        ).unwrap()
+        .body(dto_to_body(&dto::NewUser {
+            first_name: String::from("John"),
+            last_name: String::from("Doe"),
+        }))
+        .unwrap()
 }
 
 #[tokio::test]

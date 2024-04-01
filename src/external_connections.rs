@@ -65,11 +65,11 @@ where
     #[error(transparent)]
     /// Represents that the lambda failed, returning the error from the lambda
     Source(SourceErr),
-    
+
     #[error("Failed to start the transaction: {0}")]
     /// Represents that the database failed to start the transaction, and the lambda did not execute.
     TxBegin(TxBeginErr),
-    
+
     #[error("Got a successful result, but the database transaction failed: {transaction_err}")]
     /// Represents that the lambda executed successfully, but the database transaction failed to commit.
     /// The original result of the lambda is provided in this error.
