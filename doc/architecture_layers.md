@@ -287,7 +287,9 @@ into an `anyhow::Error` called `anyhowify()`. There are also utilities for extra
 `NewId` struct. Similarly, `Count` stores the output of the `count()` SQL function.
 
 The really neat thing about using SQLx for queries is that it will automatically verify type compatibility between your
-DTOs and the database schema during build time automatically. Just another layer of correctness for your API.
+DTOs and the database schema during build time automatically. Just another layer of correctness for your API. (Side note:
+this typechecking can be done without an active database connection. See the [database documentation](./database.md#updating-offline-typechecking-for-ci) 
+for more info.)
 
 Here's how we can implement those driven adapters:
 

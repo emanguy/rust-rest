@@ -51,3 +51,15 @@ async fn create_player(
     // ...error handling and response
 }
 ```
+
+## Updating offline typechecking for CI
+
+In CI, some steps utilize SQLx's "offline typechecking" capability to allow building the code without having access to
+an active database running. Anytime you update a SQL query in your code or write a new one, you'll need to update the
+offline cache of type information for the database to make sure offline typechecking stays accurate (offline typechecking
+is enabled by setting the `SQLX_OFFLINE` environment variable to `true` if you want to do this yourself).
+
+In order to update the offline typecheck information, you'll need the SQLx cargo plugin. This can be installed 
+by running `cargo install sqlx-cli`.
+
+Once you have that installed, you can update the offline type data by running `cargo sqlx prepare` with an active database.
