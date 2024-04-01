@@ -7,6 +7,17 @@ This repository contains a starting point for a testable Rust microservice using
 
 Additional documentation and "getting started" material can be found in the [template documentation](./doc/README.md).
 
+This template includes:
+* Unit testing for both HTTP routers and business logic
+* Integration tests against a real Postgres database
+* CI via CircleCI which runs unit and integration tests, lints the code, and verifies formatting
+* OpenAPI documentation via Swagger UI
+* A configurable logger
+* Validation for incoming HTTP request DTOs
+* Tons of documentation on the coding patterns used in the template
+
+Try it out for yourself, contributions are welcome!
+
 ## Benchmark
 
 Did a quick load test on the server using `oha` running for 5 minutes:
