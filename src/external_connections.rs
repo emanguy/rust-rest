@@ -94,7 +94,7 @@ where
 /// the transaction handle passed to it is committed as long as [transaction_context] does not return
 /// a [Result::Err].
 #[allow(dead_code)]
-pub async fn with_transaction<'tx, TxAble, ErrBegin, Handle, ErrCommit, Fn, Fut, Ret, ErrSource>(
+pub async fn with_transaction<'tx, TxAble, ErrBegin, Handle, ErrCommit, Fn, Ret, ErrSource>(
     tx_origin: &'tx TxAble,
     transaction_context: Fn,
 ) -> Result<Ret, TxOrSourceError<Ret, ErrSource, TxAble::Error, Handle::Error>>
@@ -103,8 +103,7 @@ where
     ErrBegin: Debug + Display,
     Handle: TransactionHandle<Error = ErrCommit>,
     ErrCommit: Debug + Display,
-    Fn: FnOnce(&mut Handle) -> Fut,
-    Fut: Future<Output = Result<Ret, ErrSource>>,
+    Fn: AsyncFnOnce(&mut Handle) -> Result<Ret, ErrSource>,
     ErrSource: Debug + Display,
 {
     let mut tx_handle = tx_origin
@@ -142,7 +141,7 @@ mod with_transaction_test {
     #[tokio::test]
     async fn commits_on_success() {
         let ext_cxn = test_util::FakeExternalConnectivity::new();
-        let tx_result = with_transaction(&ext_cxn, |_tx_cxn| async {
+        let tx_result = with_transaction(&ext_cxn, async |_tx_cxn| {
             println!("Woohoo!");
             Ok::<(), SampleErr>(())
         })
@@ -155,7 +154,7 @@ mod with_transaction_test {
     #[tokio::test]
     async fn does_not_commit_on_failure() {
         let ext_cxn = test_util::FakeExternalConnectivity::new();
-        let tx_result = with_transaction(&ext_cxn, |_tx_cxn| async {
+        let tx_result = with_transaction(&ext_cxn, async |_tx_cxn| {
             println!("Whoopsie!");
             Err::<(), SampleErr>(SampleErr)
         })
@@ -221,7 +220,6 @@ pub mod test_util {
         type Handle<'cxn> = MockHandle;
         type Error = Infallible;
 
-        #[allow(clippy::diverging_sub_expression)]
         async fn database_cxn(&mut self) -> Result<Self::Handle<'_>, Self::Error> {
             Ok(MockHandle {})
         }

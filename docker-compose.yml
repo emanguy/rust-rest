@@ -9,3 +9,11 @@ services:
       - "5432:5432"
     volumes:
       - "./postgres-scripts:/docker-entrypoint-initdb.d"
+
+  jaeger-trace:
+    image: jaegertracing/jaeger:2.1.0
+    ports:
+      # OpenTelemetry gRPC write port
+      - "4317:4317"
+      # Jaeger UI
+      - "16686:16686"

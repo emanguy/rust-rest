@@ -1,36 +1,28 @@
 use std::env;
 use std::sync::Arc;
-
+use std::time::Duration;
+use axum::body::Body;
 use axum::extract::State;
-
+use axum::http::{Request, Response};
 use axum::Router;
 use dotenv::dotenv;
-use log::*;
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
+use tracing::*;
 
 mod api;
 mod app_env;
 mod db;
 mod domain;
 mod dto;
-// mod entity;
+mod logging;
 mod persistence;
-// mod routes;
 mod routing_utils;
 
 mod external_connections;
 #[cfg(test)]
 mod integration_test;
-
-/// Configures the logging system for the application. Pulls configuration from the [LOG_LEVEL](app_env::LOG_LEVEL)
-/// environment variable. Sets log level to "INFO" for all modules and sqlx to "WARN" by default.
-pub fn configure_logger() {
-    env_logger::builder()
-        .filter_level(LevelFilter::Info)
-        .filter_module("sqlx", LevelFilter::Warn)
-        .parse_env(app_env::LOG_LEVEL)
-        .init();
-}
 
 /// Global data store which is shared among HTTP routes
 pub struct SharedData {
@@ -45,7 +37,14 @@ async fn main() {
     if dotenv().is_err() {
         println!("Starting server without .env file.");
     }
-    configure_logger();
+    let span_url = env::var(app_env::OTEL_SPAN_EXPORT_URL)
+        .unwrap_or_else(|_| "http://localhost:4317".to_owned());
+    let metric_url = env::var(app_env::OTEL_METRIC_EXPORT_URL)
+        .unwrap_or_else(|_| "http://localhost:4317".to_owned());
+    logging::setup_logging_and_tracing(
+        logging::init_env_filter(),
+        Some(logging::init_exporters(&span_url, &metric_url)),
+    );
     let db_url = env::var(app_env::DB_URL).expect("Could not get database URL from environment");
 
     let sqlx_db_connection = db::connect_sqlx(&db_url).await;
@@ -55,6 +54,25 @@ async fn main() {
         .nest("/users", api::user::user_routes())
         .nest("/tasks", api::todo::task_routes())
         .merge(api::swagger_main::build_documentation())
+        .layer(
+            ServiceBuilder::new().layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(|request: &Request<Body>| {
+                        debug_span!(
+                            "request",
+                            method = &request.method().as_str(),
+                            path = request.uri().path(),
+                            response_status = field::Empty,
+                        )
+                    })
+                    .on_response(
+                        |response: &Response<Body>, _latency: Duration, span: &Span| {
+                            span.record("response_status", field::display(response.status()));
+                            debug!("request processing complete");
+                        },
+                    ),
+            ),
+        )
         .with_state(Arc::new(SharedData { ext_cxn }));
 
     info!("Starting server.");

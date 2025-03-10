@@ -13,7 +13,7 @@ fn create_user_request() -> Request<Body> {
         .method(Method::POST)
         .uri("/users")
         .header(header::CONTENT_TYPE, "application/json")
-        .body(dto_to_body(&dto::NewUser {
+        .body(dto_to_body(&dto::user::NewUser {
             first_name: String::from("John"),
             last_name: String::from("Doe"),
         }))
@@ -32,7 +32,7 @@ async fn can_create_user() {
     let (res_parts, res_body) = response.into_parts();
     assert_eq!(StatusCode::CREATED, res_parts.status);
 
-    let new_user_dto: dto::InsertedUser = deserialize_body(res_body).await;
+    let new_user_dto: dto::user::InsertedUser = deserialize_body(res_body).await;
     assert!(new_user_dto.id > 0);
 }
 
@@ -47,7 +47,7 @@ async fn can_retrieve_user() {
     let (create_parts, body) = create_response.into_parts();
     assert_eq!(StatusCode::CREATED, create_parts.status);
 
-    let user_id: dto::InsertedUser = deserialize_body(body).await;
+    let user_id: dto::user::InsertedUser = deserialize_body(body).await;
 
     let list_users_req = Request::builder()
         .method(Method::GET)
@@ -62,8 +62,8 @@ async fn can_retrieve_user() {
 
     assert_eq!(StatusCode::OK, list_users_parts.status);
 
-    let received_user: Vec<dto::TodoUser> = deserialize_body(lu_body).await;
-    let expected_user = dto::TodoUser {
+    let received_user: Vec<dto::user::TodoUser> = deserialize_body(lu_body).await;
+    let expected_user = dto::user::TodoUser {
         id: user_id.id,
         first_name: String::from("John"),
         last_name: String::from("Doe"),

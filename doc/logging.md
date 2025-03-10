@@ -1,5 +1,7 @@
 # Logging
 
+TODO update this to reflect the addition of the "tracing" crate!
+
 In this microservice template, logging is handled via the standard [log facade](https://crates.io/crates/log),
 with [env_logger](https://crates.io/crates/env_logger) as the underlying implementation. You may log information
 at the levels provided by the facade by invoking the provided macros

@@ -1,5 +1,5 @@
 use crate::persistence::ExternalConnectivity;
-use crate::{app_env, configure_logger, db, SharedData};
+use crate::{app_env, db, SharedData};
 use axum::Router;
 use dotenv::dotenv;
 use lazy_static::lazy_static;
@@ -8,6 +8,7 @@ use sqlx::{Connection, PgConnection, Row};
 use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use crate::logging::{init_env_filter, setup_logging_and_tracing};
 
 lazy_static! {
     static ref LOGGER_INITIALIZED: Mutex<bool> = Mutex::from(false);
@@ -113,7 +114,7 @@ pub async fn prepare_application(routes: Router<Arc<SharedData>>) -> (Router, sq
             if dotenv().is_err() {
                 println!("Test is running without .env file.");
             }
-            configure_logger();
+            setup_logging_and_tracing(init_env_filter(), None);
 
             *mutex_handle = true;
         }

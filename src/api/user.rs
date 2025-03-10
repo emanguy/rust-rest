@@ -8,7 +8,7 @@ use axum::http::StatusCode;
 use axum::response::ErrorResponse;
 use axum::routing::get;
 use axum::Router;
-use log::{error, info};
+use tracing::*;
 use serde::Deserialize;
 use std::sync::Arc;
 use utoipa::OpenApi;
@@ -33,14 +33,14 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
     Router::new()
         .route(
             "/",
-            get(|State(app_data): AppState| async move {
+            get(async |State(app_data): AppState| {
                 let user_service = domain::user::UserService;
                 let mut external_connectivity = app_data.ext_cxn.clone();
 
                 get_users(&mut external_connectivity, &user_service).await
             })
             .post(
-                |State(app_data): AppState, Json(new_user): Json<dto::NewUser>| async move {
+                async |State(app_data): AppState, Json(new_user): Json<dto::user::NewUser>| {
                     let user_service = domain::user::UserService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
@@ -51,7 +51,7 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
         .route(
             "/:user_id/tasks",
             get(
-                |State(app_data): AppState, Path(user_id): Path<i32>| async move {
+                async |State(app_data): AppState, Path(user_id): Path<i32>| {
                     let task_service = domain::todo::TaskService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
@@ -59,9 +59,9 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
                 },
             )
             .post(
-                |State(app_data): AppState,
+                async |State(app_data): AppState,
                  Path(user_id): Path<i32>,
-                 Json(new_task): Json<dto::NewTask>| async move {
+                 Json(new_task): Json<dto::task::NewTask>| {
                     let task_service = domain::todo::TaskService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
@@ -73,7 +73,7 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
         .route(
             "/:user_id/tasks/:task_id",
             get(
-                |State(app_data): AppState, Path(path): Path<GetTaskPath>| async move {
+                async |State(app_data): AppState, Path(path): Path<GetTaskPath>| {
                     let task_service = domain::todo::TaskService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
@@ -96,7 +96,7 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
 async fn get_users(
     ext_cxn: &mut impl ExternalConnectivity,
     user_service: &impl domain::user::driving_ports::UserPort,
-) -> Result<Json<Vec<dto::TodoUser>>, ErrorResponse> {
+) -> Result<Json<Vec<dto::user::TodoUser>>, ErrorResponse> {
     info!("Requested users");
     let user_reader = persistence::db_user_driven_ports::DbReadUsers;
     let users_result = user_service.get_users(&mut *ext_cxn, &user_reader).await;
@@ -109,7 +109,7 @@ async fn get_users(
     let response = users_result
         .map_err(GenericErrorResponse)?
         .into_iter()
-        .map(dto::TodoUser::from)
+        .map(dto::user::TodoUser::from)
         .collect::<Vec<_>>();
 
     Ok(Json(response))
@@ -138,10 +138,10 @@ async fn get_users(
     )
 )]
 async fn create_user(
-    new_user: dto::NewUser,
+    new_user: dto::user::NewUser,
     ext_cxn: &mut impl ExternalConnectivity,
     user_service: &impl domain::user::driving_ports::UserPort,
-) -> Result<(StatusCode, Json<dto::InsertedUser>), ErrorResponse> {
+) -> Result<(StatusCode, Json<dto::user::InsertedUser>), ErrorResponse> {
     info!("Attempt to create user: {}", new_user);
     new_user.validate().map_err(ValidationErrorResponse::from)?;
 
@@ -179,7 +179,7 @@ async fn create_user(
             Err(CreateUserError::PortError(err)) => return Err(GenericErrorResponse(err).into()),
         };
 
-    Ok((StatusCode::CREATED, Json(dto::InsertedUser { id: user_id })))
+    Ok((StatusCode::CREATED, Json(dto::user::InsertedUser { id: user_id })))
 }
 
 /// Handles [TaskError] instances coming from business logic
@@ -230,7 +230,7 @@ async fn get_tasks_for_user(
     user_id: i32,
     ext_cxn: &mut impl ExternalConnectivity,
     task_service: &impl domain::todo::driving_ports::TaskPort,
-) -> Result<Json<Vec<dto::TodoTask>>, ErrorResponse> {
+) -> Result<Json<Vec<dto::task::TodoTask>>, ErrorResponse> {
     info!("Get tasks for user {user_id}");
     // let tasks = db::get_tasks_for_user(db_cxn, user_id).await;
     let user_detect = persistence::db_user_driven_ports::DbDetectUser;
@@ -239,8 +239,8 @@ async fn get_tasks_for_user(
     let tasks_result = task_service
         .tasks_for_user(user_id, &mut *ext_cxn, &user_detect, &task_read)
         .await;
-    let tasks: Vec<dto::TodoTask> = match tasks_result {
-        Ok(tasks) => tasks.into_iter().map(dto::TodoTask::from).collect(),
+    let tasks: Vec<dto::task::TodoTask> = match tasks_result {
+        Ok(tasks) => tasks.into_iter().map(dto::task::TodoTask::from).collect(),
         Err(domain_err) => return Err(handle_todo_task_err(domain_err)),
     };
 
@@ -296,7 +296,7 @@ async fn get_task_for_user(
     path: GetTaskPath,
     ext_cxn: &mut impl ExternalConnectivity,
     task_service: &impl domain::todo::driving_ports::TaskPort,
-) -> Result<Json<dto::TodoTask>, ErrorResponse> {
+) -> Result<Json<dto::task::TodoTask>, ErrorResponse> {
     info!("Get task {} for user {}", path.task_id, path.user_id);
 
     let user_detect = persistence::db_user_driven_ports::DbDetectUser;
@@ -327,7 +327,7 @@ async fn get_task_for_user(
         Err(domain_err) => return Err(handle_todo_task_err(domain_err)),
     };
 
-    Ok(Json(dto::TodoTask::from(task)))
+    Ok(Json(dto::task::TodoTask::from(task)))
 }
 
 /// Adds a new task for a user
@@ -357,10 +357,10 @@ async fn get_task_for_user(
 )]
 async fn add_task_for_user(
     user_id: i32,
-    new_task: dto::NewTask,
+    new_task: dto::task::NewTask,
     ext_cxn: &mut impl ExternalConnectivity,
     task_service: &impl domain::todo::driving_ports::TaskPort,
-) -> Result<(StatusCode, Json<dto::InsertedTask>), ErrorResponse> {
+) -> Result<(StatusCode, Json<dto::task::InsertedTask>), ErrorResponse> {
     info!("Adding task for user {user_id}");
     new_task.validate().map_err(ValidationErrorResponse::from)?;
 
@@ -384,7 +384,7 @@ async fn add_task_for_user(
 
     Ok((
         StatusCode::CREATED,
-        Json(dto::InsertedTask { id: new_task_id }),
+        Json(dto::task::InsertedTask { id: new_task_id }),
     ))
 }
 
@@ -424,12 +424,12 @@ mod tests {
                 .is_ok()
                 .matches(|Json(user_list)| {
                     matches!(user_list.as_slice(), [
-                        dto::TodoUser {
+                        dto::user::TodoUser {
                             id: 1,
                             first_name: f1,
                             last_name: l1,
                         },
-                        dto::TodoUser {
+                        dto::user::TodoUser {
                             id: 2,
                             first_name: f2,
                             last_name: l2,
@@ -468,8 +468,8 @@ mod tests {
     mod create_user {
         use super::*;
 
-        fn create_user_payload() -> dto::NewUser {
-            dto::NewUser {
+        fn create_user_payload() -> dto::user::NewUser {
+            dto::user::NewUser {
                 first_name: "John".to_owned(),
                 last_name: "Doe".to_owned(),
             }
@@ -599,11 +599,11 @@ mod tests {
                 });
 
             assert!(matches!(tasks.as_slice(), [
-                dto::TodoTask{
+                dto::task::TodoTask{
                     id: 3,
                     description: d1,
                 },
-                dto::TodoTask {
+                dto::task::TodoTask {
                     id: 10,
                     description: d2,
                 }
@@ -662,7 +662,7 @@ mod tests {
                 });
 
             assert!(matches!(task,
-                dto::TodoTask {
+                dto::task::TodoTask {
                     id: 10,
                     description
                 } if description == "Something to do",
@@ -712,8 +712,8 @@ mod tests {
     mod add_task_for_user {
         use super::*;
 
-        fn new_task_payload() -> dto::NewTask {
-            dto::NewTask {
+        fn new_task_payload() -> dto::task::NewTask {
+            dto::task::NewTask {
                 item_desc: "Something to do".to_owned(),
             }
         }
