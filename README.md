@@ -90,3 +90,9 @@ cargo test --features integration_test
 ```
 
 More information on integration testing can be found in the [testing documentation](./doc/testing.md#writing-integration-tests).
+
+## OpenTelemetry
+
+This template is pre-configured to send OpenTelemetry data to a local Jaeger instance or an OpenTelemetry sink of your
+choosing. You can read more on the template's [opentelemetry support here](./doc/logging.md) and view the Jaeger instance
+at http://localhost:16686/

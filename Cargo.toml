@@ -3,6 +3,7 @@ name = "sample-rest"
 version = "1.0.0"
 authors = ["Evan Rittenhouse"]
 edition = "2024"
+rust-version = "1.85.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -11,7 +11,7 @@ This template has a MSRV of Rust 1.75, as it requires official async-function-in
 ## Areas of interest
 
 1. [Architecture layers](./architecture_layers.md)
-2. [Logging](./logging.md)
+2. [Logging & Tracing](./logging.md)
 3. [Testing](./testing.md)
 4. [Database connectivity](./database.md)
 5. [Documenting the API](./api_documentation.md)
