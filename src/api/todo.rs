@@ -23,9 +23,9 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
     Router::new().route(
         "/:task_id",
         patch(
-            |State(app_state): AppState,
+            async |State(app_state): AppState,
              Path(task_id): Path<i32>,
-             Json(update): Json<dto::task::UpdateTask>| async move {
+             Json(update): Json<dto::task::UpdateTask>| {
                 let mut ext_cxn = app_state.ext_cxn.clone();
                 let task_service = domain::todo::TaskService;
 
@@ -33,7 +33,7 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
             },
         )
         .delete(
-            |State(app_state): AppState, Path(task_id): Path<i32>| async move {
+            async |State(app_state): AppState, Path(task_id): Path<i32>| {
                 let mut ext_cxn = app_state.ext_cxn.clone();
                 let task_service = domain::todo::TaskService;
 
