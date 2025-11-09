@@ -695,7 +695,7 @@ pub mod test_util {
                 .tasks
                 .iter()
                 .find(|task| task.owner_user_id == user_id && task.id == task_id)
-                .map(Clone::clone);
+                .cloned();
 
             Ok(task)
         }

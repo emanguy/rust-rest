@@ -60,6 +60,7 @@ pub mod driven_ports {
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<bool, anyhow::Error>;
 
+        #[allow(clippy::needless_lifetimes)]
         /// Returns true if a user with the given description already exists
         async fn user_with_name_exists<'strings>(
             &self,
