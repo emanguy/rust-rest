@@ -530,6 +530,7 @@ pub mod test_util {
             Ok(detector.created_users.iter().any(|user| user.id == user_id))
         }
 
+        #[allow(clippy::needless_lifetimes)]
         async fn user_with_name_exists<'strings>(
             &self,
             description: UserDescription<'strings>,
