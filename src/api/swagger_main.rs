@@ -17,6 +17,7 @@ pub fn build_documentation() -> SwaggerUi {
     api_docs.merge(dto::OpenApiSchemas::openapi());
     api_docs.merge(super::user::UsersApi::openapi());
     api_docs.merge(super::todo::TaskApi::openapi());
+    api_docs.merge(super::tracing_prop::TracingApi::openapi());
 
     SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api_docs)
 }

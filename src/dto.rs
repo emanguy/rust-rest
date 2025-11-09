@@ -1,9 +1,10 @@
-use crate::domain;
-use derive_more::Display;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::openapi::{RefOr, Schema};
-use utoipa::{openapi, OpenApi, ToSchema};
-use validator::{Validate, ValidationErrors};
+use utoipa::{OpenApi, ToSchema, openapi};
+use validator::ValidationErrors;
+
+#[cfg(test)]
+use serde::Deserialize;
 
 #[derive(OpenApi)]
 #[openapi(components(
@@ -28,8 +29,8 @@ use validator::{Validate, ValidationErrors};
 /// Captures OpenAPI schemas and canned responses defined in the DTO module
 pub struct OpenApiSchemas;
 
-pub mod user;
 pub mod task;
+pub mod user;
 
 /// Contains diagnostic information about an API failure
 #[derive(Serialize, Debug, ToSchema)]
@@ -72,7 +73,7 @@ pub mod err_resps {
             }
         })
     )]
-    pub struct BasicError400Validation(BasicError);
+    pub struct BasicError400Validation(#[expect(dead_code)] BasicError);
 
     #[derive(ToResponse)]
     #[response(
@@ -83,7 +84,7 @@ pub mod err_resps {
             "extra_info": null
         })
     )]
-    pub struct BasicError404(BasicError);
+    pub struct BasicError404(#[expect(dead_code)] BasicError);
 
     #[derive(ToResponse)]
     #[response(
@@ -94,7 +95,7 @@ pub mod err_resps {
             "extra_info": null
         })
     )]
-    pub struct BasicError500(BasicError);
+    pub struct BasicError500(#[expect(dead_code)] BasicError);
 }
 
 /// Extra contextual information which explains why an API error occurred
@@ -118,5 +119,3 @@ impl<'schem> ToSchema<'schem> for ValidationErrorSchema {
         )
     }
 }
-
-

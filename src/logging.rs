@@ -1,13 +1,14 @@
 use crate::app_env;
 use opentelemetry::trace::TracerProvider;
-use opentelemetry::KeyValue;
+use opentelemetry::{KeyValue, global};
 use opentelemetry_otlp::{MetricExporter, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::Tracer;
-use opentelemetry_sdk::{runtime, Resource};
+use opentelemetry_sdk::{Resource, runtime};
 use tracing::level_filters::LevelFilter;
 use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
-use tracing_subscriber::{prelude::*, registry, EnvFilter};
+use tracing_subscriber::{EnvFilter, prelude::*, registry};
 
 /// The name of the service as it should appear in OpenTelemetry collectors
 const SERVICE_NAME: &str = "sample-rest";
@@ -66,6 +67,8 @@ pub fn init_env_filter() -> EnvFilter {
 /// applied specifically to the JSON logger printing to stdout. Though the logger is set up with the
 /// "tracing" crate, it also provides a bridge for libraries still using "log" for logging.
 pub fn setup_logging_and_tracing(env_filter: EnvFilter, otel_exporters: Option<OtelExporters>) {
+    global::set_text_map_propagator(TraceContextPropagator::new());
+
     if let Some(exporters) = otel_exporters {
         registry()
             .with(LevelFilter::DEBUG)

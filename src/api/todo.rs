@@ -1,13 +1,13 @@
 use crate::external_connections::ExternalConnectivity;
 use crate::routing_utils::{GenericErrorResponse, Json, ValidationErrorResponse};
-use crate::{domain, dto, persistence, AppState, SharedData};
+use crate::{AppState, SharedData, domain, dto, persistence};
+use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{ErrorResponse, IntoResponse, Response};
 use axum::routing::patch;
-use axum::Router;
-use tracing::*;
 use std::sync::Arc;
+use tracing::*;
 use utoipa::OpenApi;
 use validator::Validate;
 
@@ -24,8 +24,8 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
         "/:task_id",
         patch(
             async |State(app_state): AppState,
-             Path(task_id): Path<i32>,
-             Json(update): Json<dto::task::UpdateTask>| {
+                   Path(task_id): Path<i32>,
+                   Json(update): Json<dto::task::UpdateTask>| {
                 let mut ext_cxn = app_state.ext_cxn.clone();
                 let task_service = domain::todo::TaskService;
 

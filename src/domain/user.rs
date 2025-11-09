@@ -1,5 +1,5 @@
-use crate::domain::user::driving_ports::CreateUserError;
 use crate::domain::Error;
+use crate::domain::user::driving_ports::CreateUserError;
 use crate::external_connections::ExternalConnectivity;
 use anyhow::Context;
 use tracing::*;
@@ -25,6 +25,8 @@ pub mod driven_ports {
             &self,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<Vec<TodoUser>, anyhow::Error>;
+
+        #[expect(dead_code)]
         /// Retrieve a specific user in the system
         async fn by_id(
             &self,
@@ -157,7 +159,6 @@ pub(super) async fn verify_user_exists(
 }
 
 impl driving_ports::UserPort for UserService {
-    
     #[instrument(skip(self, ext_cxn, u_reader))]
     async fn get_users(
         &self,

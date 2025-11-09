@@ -2,15 +2,15 @@ use crate::domain::todo::driving_ports::TaskError;
 use crate::domain::user::driving_ports::CreateUserError;
 use crate::external_connections::ExternalConnectivity;
 use crate::routing_utils::{GenericErrorResponse, Json, ValidationErrorResponse};
-use crate::{domain, dto, persistence, AppState, SharedData};
+use crate::{AppState, SharedData, domain, dto, persistence};
+use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::ErrorResponse;
 use axum::routing::get;
-use axum::Router;
-use tracing::*;
 use serde::Deserialize;
 use std::sync::Arc;
+use tracing::*;
 use utoipa::OpenApi;
 use validator::Validate;
 
@@ -60,8 +60,8 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
             )
             .post(
                 async |State(app_data): AppState,
-                 Path(user_id): Path<i32>,
-                 Json(new_task): Json<dto::task::NewTask>| {
+                       Path(user_id): Path<i32>,
+                       Json(new_task): Json<dto::task::NewTask>| {
                     let task_service = domain::todo::TaskService;
                     let mut external_connectivity = app_data.ext_cxn.clone();
 
@@ -93,6 +93,7 @@ pub fn user_routes() -> Router<Arc<SharedData>> {
         (status = 500, response = dto::err_resps::BasicError500)
     ),
 )]
+#[tracing::instrument(skip_all)]
 async fn get_users(
     ext_cxn: &mut impl ExternalConnectivity,
     user_service: &impl domain::user::driving_ports::UserPort,
@@ -137,6 +138,7 @@ async fn get_users(
         (status = 500, response = dto::err_resps::BasicError500)
     )
 )]
+#[tracing::instrument(skip(ext_cxn, user_service))]
 async fn create_user(
     new_user: dto::user::NewUser,
     ext_cxn: &mut impl ExternalConnectivity,
@@ -174,12 +176,15 @@ async fn create_user(
                         extra_info: None,
                     }),
                 )
-                    .into())
+                    .into());
             }
             Err(CreateUserError::PortError(err)) => return Err(GenericErrorResponse(err).into()),
         };
 
-    Ok((StatusCode::CREATED, Json(dto::user::InsertedUser { id: user_id })))
+    Ok((
+        StatusCode::CREATED,
+        Json(dto::user::InsertedUser { id: user_id }),
+    ))
 }
 
 /// Handles [TaskError] instances coming from business logic
@@ -226,6 +231,7 @@ fn handle_todo_task_err(err: TaskError) -> ErrorResponse {
         (status = 500, response = dto::err_resps::BasicError500)
     ),
 )]
+#[tracing::instrument(skip(ext_cxn, task_service))]
 async fn get_tasks_for_user(
     user_id: i32,
     ext_cxn: &mut impl ExternalConnectivity,
@@ -248,7 +254,7 @@ async fn get_tasks_for_user(
 }
 
 /// Captures path variables from the "get task" endpoint
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct GetTaskPath {
     user_id: i32,
     task_id: i32,
@@ -292,6 +298,7 @@ struct GetTaskPath {
         (status = 500, response = dto::err_resps::BasicError500),
     )
 )]
+#[tracing::instrument(skip(ext_cxn, task_service))]
 async fn get_task_for_user(
     path: GetTaskPath,
     ext_cxn: &mut impl ExternalConnectivity,
@@ -322,7 +329,7 @@ async fn get_task_for_user(
                     extra_info: None,
                 }),
             )
-                .into())
+                .into());
         }
         Err(domain_err) => return Err(handle_todo_task_err(domain_err)),
     };
@@ -355,6 +362,7 @@ async fn get_task_for_user(
         (status = 500, response = dto::err_resps::BasicError500),
     ),
 )]
+#[tracing::instrument(skip(ext_cxn, task_service))]
 async fn add_task_for_user(
     user_id: i32,
     new_task: dto::task::NewTask,

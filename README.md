@@ -93,6 +93,8 @@ More information on integration testing can be found in the [testing documentati
 
 ## OpenTelemetry
 
-This template is pre-configured to send OpenTelemetry data to a local Jaeger instance or an OpenTelemetry sink of your
-choosing. You can read more on the template's [opentelemetry support here](./doc/logging.md) and view the Jaeger instance
-at http://localhost:16686/
+This template is pre-configured to send OpenTelemetry data to a local Grafana Tempo instance or an OpenTelemetry sink of your
+choosing. You can read more on the template's [opentelemetry support here](./doc/logging.md) and view the Grafana instance
+at http://localhost:3000/. You can then find traces emitted by your app on the "traces" page:
+
+![traces page](./doc/img/grafana_traces.png)

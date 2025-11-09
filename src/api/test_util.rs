@@ -1,6 +1,6 @@
 use axum::body;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 /// Used in tests to both extract the raw bytes from the HTTP response body and then deserialize them into the
 /// requested type. Will panic and fail the test if either step fails somehow.

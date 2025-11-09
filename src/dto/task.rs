@@ -1,10 +1,10 @@
+use crate::domain;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
-use crate::domain;
 
 /// DTO for creating a new task via the API
-#[derive(Deserialize, Validate, ToSchema)]
+#[derive(Deserialize, Validate, ToSchema, Debug)]
 #[cfg_attr(test, derive(Serialize))]
 pub struct NewTask {
     #[validate(length(min = 1))]

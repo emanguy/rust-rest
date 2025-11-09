@@ -1,15 +1,18 @@
-use std::env;
-use std::sync::Arc;
-use std::time::Duration;
+use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Request, Response};
-use axum::Router;
 use dotenv::dotenv;
+use opentelemetry::global;
+use opentelemetry_http::HeaderExtractor;
+use std::env;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tracing::*;
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod api;
 mod app_env;
@@ -53,17 +56,24 @@ async fn main() {
     let router = Router::new()
         .nest("/users", api::user::user_routes())
         .nest("/tasks", api::todo::task_routes())
+        .nest("/tracing-demo", api::tracing_prop::tracing_routes())
         .merge(api::swagger_main::build_documentation())
         .layer(
             ServiceBuilder::new().layer(
                 TraceLayer::new_for_http()
                     .make_span_with(|request: &Request<Body>| {
-                        debug_span!(
+                        let req_span = debug_span!(
                             "request",
                             method = &request.method().as_str(),
                             path = request.uri().path(),
                             response_status = field::Empty,
-                        )
+                        );
+
+                        req_span.set_parent(global::get_text_map_propagator(|propagator| {
+                            propagator.extract(&HeaderExtractor(request.headers()))
+                        }));
+
+                        req_span
                     })
                     .on_response(
                         |response: &Response<Body>, _latency: Duration, span: &Span| {

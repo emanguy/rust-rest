@@ -1,8 +1,8 @@
+use crate::domain;
 use derive_more::Display;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
-use crate::domain;
 
 /// DTO for a constructed user
 #[derive(Serialize, ToSchema)]
@@ -27,8 +27,8 @@ impl From<domain::user::TodoUser> for TodoUser {
 }
 
 /// DTO for creating a new user via the API
-#[derive(Deserialize, Display, Validate, ToSchema)]
-#[display(fmt = "{} {}", "first_name", "last_name")]
+#[derive(Deserialize, Display, Validate, ToSchema, Debug)]
+#[display("{first_name} {last_name}")]
 #[cfg_attr(test, derive(Serialize))]
 pub struct NewUser {
     #[validate(length(max = 30))]

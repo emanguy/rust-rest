@@ -10,10 +10,68 @@ services:
     volumes:
       - "./postgres-scripts:/docker-entrypoint-initdb.d"
 
-  jaeger-trace:
-    image: jaegertracing/jaeger:2.1.0
+  # -----------------------------------------------------------------------------
+  # The following config sets up Grafana, Grafana Tempo, and Prometheus
+  # to collect spans for local runs. It is taken from the "local" example setup
+  # for Grafana Tempo on GitHub: https://github.com/grafana/tempo/tree/9874d459b52d25d691eb56919866bfeb850d315e/example/docker-compose/local
+  # -----------------------------------------------------------------------------
+
+  # Tempo runs as user 10001, and docker compose creates the volume as root.
+  # As such, we need to chown the volume in order for Tempo to start correctly.
+  init:
+    image: &tempoImage grafana/tempo:latest
+    user: root
+    entrypoint:
+      - "chown"
+      - "-R"
+      - "10001:10001"
+      - "/var/tempo"
+    volumes:
+      - ./backing-services-data/tempo-data:/var/tempo
+
+  memcached:
+    image: memcached:1.6.38
+    container_name: memcached
     ports:
-      # OpenTelemetry gRPC write port
-      - "4317:4317"
-      # Jaeger UI
-      - "16686:16686"
+      - "11211:11211"
+    environment:
+      - MEMCACHED_MAX_MEMORY=64m # Set the maximum memory usage
+      - MEMCACHED_THREADS=4 # Number of threads to use
+
+  tempo:
+    image: *tempoImage
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./backing-services-data/tempo.yaml:/etc/tempo.yaml
+      - ./backing-services-data/tempo-data:/var/tempo
+    ports:
+      - "3200:3200" # tempo
+      - "9095:9095" # tempo grpc
+      - "4317:4317" # otlp grpc
+    depends_on:
+      - init
+      - memcached
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - --config.file=/etc/prometheus.yaml
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+      - --enable-feature=native-histograms
+    volumes:
+      - ./backing-services-data/prometheus.yaml:/etc/prometheus.yaml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:12.0.0
+    volumes:
+      - ./backing-services-data/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor metricsSummary
+    ports:
+      - "3000:3000"

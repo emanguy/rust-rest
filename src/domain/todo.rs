@@ -181,7 +181,6 @@ pub mod driving_ports {
 pub struct TaskService;
 
 impl driving_ports::TaskPort for TaskService {
-    
     #[instrument(skip(self, ext_cxn, u_detect, task_read))]
     async fn tasks_for_user(
         &self,
@@ -264,8 +263,8 @@ mod tests {
     use super::test_util::*;
     use super::*;
     use crate::domain::todo::driving_ports::TaskPort;
-    use crate::domain::user::test_util::InMemoryUserPersistence;
     use crate::domain::user::CreateUser;
+    use crate::domain::user::test_util::InMemoryUserPersistence;
     use crate::external_connections;
     use speculoos::prelude::*;
     use std::sync::RwLock;
