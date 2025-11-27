@@ -1,20 +1,21 @@
-use crate::domain;
-use derive_more::Display;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use utoipa::openapi::{RefOr, Schema};
-use utoipa::{openapi, OpenApi, ToSchema};
-use validator::{Validate, ValidationErrors};
+use utoipa::{OpenApi, ToSchema, openapi};
+use validator::ValidationErrors;
+
+#[cfg(test)]
+use serde::Deserialize;
 
 #[derive(OpenApi)]
 #[openapi(components(
     schemas(
-        TodoUser,
-        NewUser,
-        InsertedUser,
-        NewTask,
-        TodoTask,
-        UpdateTask,
-        InsertedTask,
+        user::TodoUser,
+        user::NewUser,
+        user::InsertedUser,
+        task::NewTask,
+        task::TodoTask,
+        task::UpdateTask,
+        task::InsertedTask,
         BasicError,
         ExtraInfo,
         ValidationErrorSchema,
@@ -28,103 +29,8 @@ use validator::{Validate, ValidationErrors};
 /// Captures OpenAPI schemas and canned responses defined in the DTO module
 pub struct OpenApiSchemas;
 
-/// DTO for a constructed user
-#[derive(Serialize, ToSchema)]
-#[cfg_attr(test, derive(Deserialize, PartialEq, Eq, Debug))]
-pub struct TodoUser {
-    #[schema(example = 4)]
-    pub id: i32,
-    #[schema(example = "John")]
-    pub first_name: String,
-    #[schema(example = "Doe")]
-    pub last_name: String,
-}
-
-impl From<domain::user::TodoUser> for TodoUser {
-    fn from(value: domain::user::TodoUser) -> Self {
-        TodoUser {
-            id: value.id,
-            first_name: value.first_name,
-            last_name: value.last_name,
-        }
-    }
-}
-
-/// DTO for creating a new user via the API
-#[derive(Deserialize, Display, Validate, ToSchema)]
-#[display(fmt = "{} {}", "first_name", "last_name")]
-#[cfg_attr(test, derive(Serialize))]
-pub struct NewUser {
-    #[validate(length(max = 30))]
-    pub first_name: String,
-    #[validate(length(max = 50))]
-    pub last_name: String,
-}
-
-/// DTO containing the ID of a user that was created via the API.
-#[derive(Serialize, ToSchema)]
-#[cfg_attr(test, derive(Deserialize, Debug))]
-pub struct InsertedUser {
-    #[schema(example = 10)]
-    pub id: i32,
-}
-
-/// DTO for creating a new task via the API
-#[derive(Deserialize, Validate, ToSchema)]
-#[cfg_attr(test, derive(Serialize))]
-pub struct NewTask {
-    #[validate(length(min = 1))]
-    pub item_desc: String,
-}
-
-impl From<NewTask> for domain::todo::NewTask {
-    fn from(value: NewTask) -> Self {
-        domain::todo::NewTask {
-            description: value.item_desc,
-        }
-    }
-}
-
-/// DTO for a returned task on the API
-#[derive(Serialize, ToSchema)]
-pub struct TodoTask {
-    #[schema(example = 10)]
-    pub id: i32,
-    #[schema(example = "Something to do")]
-    pub description: String,
-}
-
-impl From<domain::todo::TodoTask> for TodoTask {
-    fn from(value: domain::todo::TodoTask) -> Self {
-        TodoTask {
-            id: value.id,
-            description: value.item_desc,
-        }
-    }
-}
-
-/// DTO for updating a task's content via the API
-#[derive(Deserialize, Validate, ToSchema)]
-#[cfg_attr(test, derive(Serialize))]
-pub struct UpdateTask {
-    #[validate(length(min = 1))]
-    pub description: String,
-}
-
-impl From<UpdateTask> for domain::todo::UpdateTask {
-    fn from(value: UpdateTask) -> Self {
-        domain::todo::UpdateTask {
-            description: value.description,
-        }
-    }
-}
-
-/// DTO for a newly created task
-#[derive(Serialize, ToSchema)]
-pub struct InsertedTask {
-    #[schema(example = 5)]
-    pub id: i32,
-}
+pub mod task;
+pub mod user;
 
 /// Contains diagnostic information about an API failure
 #[derive(Serialize, Debug, ToSchema)]
@@ -167,7 +73,7 @@ pub mod err_resps {
             }
         })
     )]
-    pub struct BasicError400Validation(BasicError);
+    pub struct BasicError400Validation(#[expect(dead_code)] BasicError);
 
     #[derive(ToResponse)]
     #[response(
@@ -178,7 +84,7 @@ pub mod err_resps {
             "extra_info": null
         })
     )]
-    pub struct BasicError404(BasicError);
+    pub struct BasicError404(#[expect(dead_code)] BasicError);
 
     #[derive(ToResponse)]
     #[response(
@@ -189,7 +95,7 @@ pub mod err_resps {
             "extra_info": null
         })
     )]
-    pub struct BasicError500(BasicError);
+    pub struct BasicError500(#[expect(dead_code)] BasicError);
 }
 
 /// Extra contextual information which explains why an API error occurred
@@ -211,28 +117,5 @@ impl<'schem> ToSchema<'schem> for ValidationErrorSchema {
             "ValidationErrorSchema",
             openapi::ObjectBuilder::new().into(),
         )
-    }
-}
-
-#[cfg(test)]
-mod dto_tests {
-    use super::*;
-
-    mod new_user {
-        use super::*;
-
-        #[test]
-        fn bad_user_data_gets_rejected() {
-            let bad_user = NewUser {
-                first_name: (0..35).map(|_| "A").collect(),
-                last_name: (0..55).map(|_| "B").collect(),
-            };
-            let validation_result = bad_user.validate();
-            assert!(validation_result.is_err());
-            let validation_errors = validation_result.unwrap_err();
-            let field_validations = validation_errors.field_errors();
-            assert!(field_validations.contains_key("first_name"));
-            assert!(field_validations.contains_key("last_name"));
-        }
     }
 }

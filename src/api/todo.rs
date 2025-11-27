@@ -1,13 +1,13 @@
 use crate::external_connections::ExternalConnectivity;
 use crate::routing_utils::{GenericErrorResponse, Json, ValidationErrorResponse};
-use crate::{domain, dto, persistence, AppState, SharedData};
+use crate::{AppState, SharedData, domain, dto, persistence};
+use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{ErrorResponse, IntoResponse, Response};
 use axum::routing::patch;
-use axum::Router;
-use log::{error, info};
 use std::sync::Arc;
+use tracing::*;
 use utoipa::OpenApi;
 use validator::Validate;
 
@@ -23,9 +23,9 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
     Router::new().route(
         "/:task_id",
         patch(
-            |State(app_state): AppState,
-             Path(task_id): Path<i32>,
-             Json(update): Json<dto::UpdateTask>| async move {
+            async |State(app_state): AppState,
+                   Path(task_id): Path<i32>,
+                   Json(update): Json<dto::task::UpdateTask>| {
                 let mut ext_cxn = app_state.ext_cxn.clone();
                 let task_service = domain::todo::TaskService;
 
@@ -33,7 +33,7 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
             },
         )
         .delete(
-            |State(app_state): AppState, Path(task_id): Path<i32>| async move {
+            async |State(app_state): AppState, Path(task_id): Path<i32>| {
                 let mut ext_cxn = app_state.ext_cxn.clone();
                 let task_service = domain::todo::TaskService;
 
@@ -58,9 +58,10 @@ pub fn task_routes() -> Router<Arc<SharedData>> {
         (status = 500, response = dto::err_resps::BasicError500),
     ),
 )]
+#[instrument(skip(ext_cxn, task_service))]
 async fn update_task(
     task_id: i32,
-    task_data: dto::UpdateTask,
+    task_data: dto::task::UpdateTask,
     ext_cxn: &mut impl ExternalConnectivity,
     task_service: &impl domain::todo::driving_ports::TaskPort,
 ) -> Result<StatusCode, ErrorResponse> {
@@ -97,6 +98,7 @@ async fn update_task(
         (status = 500, response = dto::err_resps::BasicError500),
     ),
 )]
+#[instrument(skip(ext_cxn, task_service))]
 async fn delete_task(
     task_id: i32,
     ext_cxn: &mut impl ExternalConnectivity,
@@ -141,7 +143,7 @@ mod tests {
 
             let update_task_response = update_task(
                 2,
-                dto::UpdateTask {
+                dto::task::UpdateTask {
                     description: "Something to do".to_owned(),
                 },
                 &mut ext_cxn,
@@ -170,7 +172,7 @@ mod tests {
 
             let update_task_response = update_task(
                 2,
-                dto::UpdateTask {
+                dto::task::UpdateTask {
                     description: "Something to do".to_owned(),
                 },
                 &mut ext_cxn,
@@ -193,7 +195,7 @@ mod tests {
 
             let update_task_response = update_task(
                 5,
-                dto::UpdateTask {
+                dto::task::UpdateTask {
                     description: String::new(),
                 },
                 &mut ext_cxn,

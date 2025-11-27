@@ -20,7 +20,7 @@ Here's how that might look using the [DTO examples in the architecture documenta
 // in dto.rs
 
 // Note the ToSchema derivation here
-#[derive(Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCreateRequest {
     pub full_name: String,
@@ -28,7 +28,7 @@ pub struct PlayerCreateRequest {
 }
 
 // Note the ToSchema derivation here
-#[derive(Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCreateResponse {
     // This annotation provides the value for this field that will
@@ -125,6 +125,8 @@ pub const PLAYER_API_GROUP: &str = "Players";
         (status = 500, response = dto::err_resps::BasicError500),
     ),
 )]
+// You may include this to trace the latency of this function via the "tracing" crate. See the crate docs for more info.
+#[instrument]
 async fn create_player(
     // ...parameters
 ) -> Result<(StatusCode, Json(dto::PlayerCreateResponse)), ErrorResponse> {

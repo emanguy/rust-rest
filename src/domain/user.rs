@@ -1,7 +1,8 @@
-use crate::domain::user::driving_ports::CreateUserError;
 use crate::domain::Error;
+use crate::domain::user::driving_ports::CreateUserError;
 use crate::external_connections::ExternalConnectivity;
 use anyhow::Context;
+use tracing::*;
 
 #[derive(PartialEq, Eq, Debug, Default)]
 #[cfg_attr(test, derive(Clone))]
@@ -24,6 +25,8 @@ pub mod driven_ports {
             &self,
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<Vec<TodoUser>, anyhow::Error>;
+
+        #[expect(dead_code)]
         /// Retrieve a specific user in the system
         async fn by_id(
             &self,
@@ -57,6 +60,7 @@ pub mod driven_ports {
             ext_cxn: &mut impl ExternalConnectivity,
         ) -> Result<bool, anyhow::Error>;
 
+        #[allow(clippy::needless_lifetimes)]
         /// Returns true if a user with the given description already exists
         async fn user_with_name_exists<'strings>(
             &self,
@@ -66,6 +70,7 @@ pub mod driven_ports {
     }
 }
 
+#[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
 /// Contains information necessary to create a new user
 pub struct CreateUser {
@@ -138,6 +143,7 @@ pub(super) enum UserExistsErr {
     PortError(#[from] anyhow::Error),
 }
 
+#[instrument(skip(external_cxn, user_detect))]
 /// Asserts that a user already exists in the system, returning an error if not
 pub(super) async fn verify_user_exists(
     id: i32,
@@ -154,6 +160,7 @@ pub(super) async fn verify_user_exists(
 }
 
 impl driving_ports::UserPort for UserService {
+    #[instrument(skip(self, ext_cxn, u_reader))]
     async fn get_users(
         &self,
         ext_cxn: &mut impl ExternalConnectivity,
@@ -167,6 +174,7 @@ impl driving_ports::UserPort for UserService {
         all_users_result.context("Failed fetching users")
     }
 
+    #[instrument(skip(self, ext_cxn, u_writer, u_detect))]
     async fn create_user(
         &self,
         new_user: &CreateUser,
@@ -522,6 +530,7 @@ pub mod test_util {
             Ok(detector.created_users.iter().any(|user| user.id == user_id))
         }
 
+        #[allow(clippy::needless_lifetimes)]
         async fn user_with_name_exists<'strings>(
             &self,
             description: UserDescription<'strings>,

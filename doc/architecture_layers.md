@@ -4,9 +4,9 @@ This microservice template is built using [Hexagonal Architecture](https://mediu
 **Please read that overview before moving forward, terminology from it will be used in this document.**
 
 The app is built using the standard hexagon layout:
-* The HTTP-based driving adapters are implemented in the [API Module](../src/api/mod.rs)
-* The domain logic is implemented in the [Domain Module](../src/domain/mod.rs)
-* The driven adapters (just SQL connections for now) are implemented in the [Persistence Module](../src/persistence/mod.rs)
+* The HTTP-based driving adapters are implemented in the [API Module](../src/api.rs)
+* The domain logic is implemented in the [Domain Module](../src/domain.rs)
+* The driven adapters (just SQL connections for now) are implemented in the [Persistence Module](../src/persistence.rs)
 
 ## Layer Interactions
 
@@ -80,6 +80,8 @@ expected errors. Each set of ports will be defined in their own submodule.
 // Domain objects are defined at the module level
 // Structs containing data for specific operations should be defined
 // separately from structs that contain a full set of data.
+// Deriving debug allows this value to be captured by the "tracing" crate.
+#[derive(Debug)]
 pub struct PlayerCreate {
     pub username: String,
     pub full_name: String,
@@ -87,6 +89,7 @@ pub struct PlayerCreate {
 
 // This struct can be consumed later, but contains all
 // pertinent information about a player
+#[derive(Debug)]
 pub struct Player {
     pub id: i32,
     pub username: String,
@@ -232,6 +235,8 @@ pub struct PlayerService;
 impl driving_ports::PlayerPort for PlayerService {
     
     // And now we can implement the logic for creating the new player
+    // When instrumenting for the tracing API, exclude any parameters you don't want to log in traces with "skip"
+    #[instrument(skip(self, ext_cxn, p_detect, p_write))]
     async fn new_player(
         &self,
         player_create: &PlayerCreate,
@@ -304,6 +309,8 @@ use sqlx::query_as;
 pub struct DbPlayerWriter;
 
 impl domain::player::driven_ports::PlayerWriter for DbPlayerWriter {
+    // Ignore parameters you don't care about in "tracing" with "skip"
+    #[instrument(skip(self, ext_cxn))]
     async fn new_player(&self, creation_data: &domain::player::PlayerCreate, ext_cxn: &mut impl ExternalConnectivity) -> Result<i32, anyhow::Error> {
         // Acquire a database connection
         let mut cxn = ext_cxn.database_cxn().await.map_err(super::anyhowify)?;
@@ -330,6 +337,8 @@ impl domain::player::driven_ports::PlayerWriter for DbPlayerWriter {
 pub struct DbPlayerDetector;
 
 impl domain::player::driven_ports::PlayerDetector for DbPlayerDetector {
+    // Ignore parameters you don't care about in "tracing" with "skip"
+    #[instrument(skip(self, ext_cxn))]
     async fn player_with_username_exists(&self, username: &str, ext_cxn: &mut impl ExternalConnectivity) -> Result<bool, anyhow::Error> {
         // Acquire a database connection
         let mut cxn = ext_cxn.database_cxn().await.map_err(super::anyhowify)?;
@@ -371,17 +380,17 @@ bodies. We can also use the `rename_all` piece of the serde annotation to make t
 in camel case, which is typical for JS/TS code which would consume the API.
 
 ```rust
-// in dto.rs
+// in dto.rs. Feel free to move these to submodules as your app grows.
 use serde::{Serialize, Deserialize};
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCreateRequest {
     pub full_name: String,
     pub username: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCreateResponse {
     pub new_player_id: i32,
@@ -399,7 +408,7 @@ use serde::{Serialize, Deserialize};
 use validator::Validate;
 
 // We're now also deriving Validate so we get the .validate() function on our DTO
-#[derive(Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCreateRequest {
     // The full name should be 1-256 characters in length
@@ -462,6 +471,7 @@ Here's how the logic would be implemented:
 // In api/player.rs
 use crate::router_util::ValidationErrorResponse;
 
+#[instrument(skip(ext_cxn, player_service))]
 async fn create_player(
     new_player: dto::PlayerCreateRequest,
     ext_cxn: &mut impl ExternalConnectivity,
@@ -572,8 +582,8 @@ pub fn player_routes() -> Router<Arc<SharedData>> {
             // We're using some axum extractors here to get the application state for the
             // ExternalConnectivity instance and the request body, which we're getting via
             // the Json extractor
-            post(|State(app_data): AppState, 
-                  Json(player_create): Json<dto::PlayerCreateRequest>| async move {
+            post(async |State(app_data): AppState, 
+                  Json(player_create): Json<dto::PlayerCreateRequest>| {
                 // In order to invoke the route logic, we need ExternalConnectivity and
                 // the business logic instance. We'll create both, then invoke the route logic.
                 let player_service = domain::player::PlayerService;

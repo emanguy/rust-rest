@@ -29,6 +29,7 @@ impl domain::user::driven_ports::DetectUser for DbDetectUser {
         Ok(user_with_id_count.count() > 0)
     }
 
+    #[allow(clippy::needless_lifetimes)]
     async fn user_with_name_exists<'strings>(
         &self,
         description: UserDescription<'strings>,

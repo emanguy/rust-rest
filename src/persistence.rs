@@ -3,11 +3,12 @@ pub mod db_user_driven_ports;
 
 use crate::external_connections;
 use crate::external_connections::ConnectionHandle;
-use anyhow::{anyhow, Context};
-use std::fmt::{Debug, Display};
-
+use anyhow::{Context, anyhow};
+use reqwest_middleware::ClientBuilder;
+use reqwest_tracing::TracingMiddleware;
 use sqlx::pool::PoolConnection;
 use sqlx::{Acquire, PgConnection, PgPool, Postgres, Transaction};
+use std::fmt::{Debug, Display};
 
 /// Data structure which owns clients for connecting to external systems.
 /// Allows business logic to be agnostic of the external systems it communicates with
@@ -15,13 +16,18 @@ use sqlx::{Acquire, PgConnection, PgPool, Postgres, Transaction};
 #[derive(Clone)]
 pub struct ExternalConnectivity {
     db: PgPool,
+    http_client: reqwest_middleware::ClientWithMiddleware,
 }
 
 impl ExternalConnectivity {
     /// Accepts the set of clients used to connect to external systems and constructs
     /// an instance of ExternalConnectivity owning those clients
     pub fn new(db: PgPool) -> Self {
-        ExternalConnectivity { db }
+        let base_client = reqwest::Client::builder().use_rustls_tls().build().unwrap();
+        let http_client = ClientBuilder::new(base_client)
+            .with(TracingMiddleware::default())
+            .build();
+        ExternalConnectivity { db, http_client }
     }
 }
 
@@ -37,37 +43,43 @@ impl ConnectionHandle for PoolConnectionHandle {
 }
 
 impl external_connections::ExternalConnectivity for ExternalConnectivity {
-    type Handle<'cxn_borrow> = PoolConnectionHandle;
-    type Error = anyhow::Error;
+    type DbHandle<'cxn_borrow> = PoolConnectionHandle;
 
-    async fn database_cxn(&mut self) -> Result<Self::Handle<'_>, Self::Error> {
+    async fn database_cxn(&mut self) -> Result<Self::DbHandle<'_>, anyhow::Error> {
         let handle = PoolConnectionHandle {
             active_connection: self.db.acquire().await?,
         };
 
         Ok(handle)
     }
+
+    fn http_client(&self) -> &reqwest_middleware::ClientWithMiddleware {
+        &self.http_client
+    }
 }
 
 impl external_connections::Transactable for ExternalConnectivity {
-    type Handle<'handle> = ExternalConnectionsInTransaction<'handle>;
-    type Error = anyhow::Error;
+    type Handle = ExternalConnectionsInTransaction;
 
-    async fn start_transaction(&self) -> Result<Self::Handle<'_>, Self::Error> {
+    async fn start_transaction(&self) -> Result<Self::Handle, anyhow::Error> {
         let transaction = self
             .db
             .begin()
             .await
             .context("Starting transaction from db pool")?;
 
-        Ok(ExternalConnectionsInTransaction { txn: transaction })
+        Ok(ExternalConnectionsInTransaction {
+            txn: transaction,
+            http_client: self.http_client.clone(),
+        })
     }
 }
 
 /// A variant of ExternalConnectivity where the database client has an active database transaction
 /// which can later be committed
-pub struct ExternalConnectionsInTransaction<'tx> {
-    txn: Transaction<'tx, Postgres>,
+pub struct ExternalConnectionsInTransaction {
+    txn: Transaction<'static, Postgres>,
+    http_client: reqwest_middleware::ClientWithMiddleware,
 }
 
 /// A handle from ExternalConnectionsInTransaction which can connect to a database
@@ -75,11 +87,13 @@ pub struct TransactionHandle<'tx> {
     active_transaction: &'tx mut PgConnection,
 }
 
-impl<'tx> external_connections::ExternalConnectivity for ExternalConnectionsInTransaction<'tx> {
-    type Handle<'tx_borrow> = TransactionHandle<'tx_borrow> where Self: 'tx_borrow;
-    type Error = anyhow::Error;
+impl external_connections::ExternalConnectivity for ExternalConnectionsInTransaction {
+    type DbHandle<'tx_borrow>
+        = TransactionHandle<'tx_borrow>
+    where
+        Self: 'tx_borrow;
 
-    async fn database_cxn(&mut self) -> Result<TransactionHandle<'_>, Self::Error> {
+    async fn database_cxn(&mut self) -> Result<TransactionHandle<'_>, anyhow::Error> {
         let handle = self
             .txn
             .acquire()
@@ -90,18 +104,20 @@ impl<'tx> external_connections::ExternalConnectivity for ExternalConnectionsInTr
             active_transaction: handle,
         })
     }
+
+    fn http_client(&self) -> &reqwest_middleware::ClientWithMiddleware {
+        &self.http_client
+    }
 }
 
-impl<'tx> ConnectionHandle for TransactionHandle<'tx> {
+impl ConnectionHandle for TransactionHandle<'_> {
     fn borrow_connection(&mut self) -> &mut PgConnection {
         &mut *self.active_transaction
     }
 }
 
-impl<'tx> external_connections::TransactionHandle for ExternalConnectionsInTransaction<'tx> {
-    type Error = anyhow::Error;
-
-    async fn commit(self) -> Result<(), Self::Error> {
+impl external_connections::TransactionHandle for ExternalConnectionsInTransaction {
+    async fn commit(self) -> Result<(), anyhow::Error> {
         self.txn
             .commit()
             .await

@@ -3,7 +3,7 @@ use crate::domain::todo::driven_ports::{TaskReader, TaskWriter};
 use crate::domain::todo::driving_ports::TaskError;
 use crate::external_connections::ExternalConnectivity;
 use anyhow::{Context, Error};
-use log::error;
+use tracing::*;
 
 #[derive(PartialEq, Eq, Debug)]
 #[cfg_attr(test, derive(Clone))]
@@ -14,12 +14,14 @@ pub struct TodoTask {
     pub item_desc: String,
 }
 
+#[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
 /// Contains information necessary to create a new task
 pub struct NewTask {
     pub description: String,
 }
 
+#[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
 /// Contains information which is allowed to be updated on a task
 pub struct UpdateTask {
@@ -179,6 +181,7 @@ pub mod driving_ports {
 pub struct TaskService;
 
 impl driving_ports::TaskPort for TaskService {
+    #[instrument(skip(self, ext_cxn, u_detect, task_read))]
     async fn tasks_for_user(
         &self,
         user_id: i32,
@@ -192,6 +195,7 @@ impl driving_ports::TaskPort for TaskService {
         Ok(tasks_result)
     }
 
+    #[instrument(skip(self, ext_cxn, u_detect, task_read))]
     async fn user_task_by_id(
         &self,
         user_id: i32,
@@ -208,6 +212,7 @@ impl driving_ports::TaskPort for TaskService {
         Ok(tasks_result)
     }
 
+    #[instrument(skip(self, ext_cxn, u_detect, task_write))]
     async fn create_task_for_user(
         &self,
         user_id: i32,
@@ -223,6 +228,7 @@ impl driving_ports::TaskPort for TaskService {
         Ok(created_task_id)
     }
 
+    #[instrument(skip(self, ext_cxn, task_write))]
     async fn delete_task(
         &self,
         task_id: i32,
@@ -236,6 +242,7 @@ impl driving_ports::TaskPort for TaskService {
         Ok(())
     }
 
+    #[instrument(skip(self, ext_cxn, task_write))]
     async fn update_task(
         &self,
         task_id: i32,
@@ -256,8 +263,8 @@ mod tests {
     use super::test_util::*;
     use super::*;
     use crate::domain::todo::driving_ports::TaskPort;
-    use crate::domain::user::test_util::InMemoryUserPersistence;
     use crate::domain::user::CreateUser;
+    use crate::domain::user::test_util::InMemoryUserPersistence;
     use crate::external_connections;
     use speculoos::prelude::*;
     use std::sync::RwLock;
@@ -688,7 +695,7 @@ pub mod test_util {
                 .tasks
                 .iter()
                 .find(|task| task.owner_user_id == user_id && task.id == task_id)
-                .map(Clone::clone);
+                .cloned();
 
             Ok(task)
         }

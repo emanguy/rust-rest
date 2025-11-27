@@ -3,6 +3,7 @@ use crate::domain::todo::{NewTask, TodoTask, UpdateTask};
 use crate::external_connections::{ConnectionHandle, ExternalConnectivity};
 use anyhow::{Context, Error};
 use sqlx::{query, query_as};
+use tracing::instrument;
 
 /// A database-based driven adapter for reading tasks
 pub struct DbTaskReader;
@@ -25,6 +26,7 @@ impl From<TodoItemRow> for domain::todo::TodoTask {
 }
 
 impl domain::todo::driven_ports::TaskReader for DbTaskReader {
+    #[instrument(skip(self, ext_cxn))]
     async fn tasks_for_user(
         &self,
         user_id: i32,
@@ -47,6 +49,7 @@ impl domain::todo::driven_ports::TaskReader for DbTaskReader {
         Ok(todo_items)
     }
 
+    #[instrument(skip(self, ext_cxn))]
     async fn user_task_by_id(
         &self,
         user_id: i32,
@@ -74,6 +77,7 @@ impl domain::todo::driven_ports::TaskReader for DbTaskReader {
 pub struct DbTaskWriter;
 
 impl domain::todo::driven_ports::TaskWriter for DbTaskWriter {
+    #[instrument(skip(self, ext_cxn))]
     async fn create_task_for_user(
         &self,
         user_id: i32,
@@ -95,6 +99,7 @@ impl domain::todo::driven_ports::TaskWriter for DbTaskWriter {
         Ok(new_id.id)
     }
 
+    #[instrument(skip(self, ext_cxn))]
     async fn delete_task(
         &self,
         task_id: i32,
@@ -110,6 +115,7 @@ impl domain::todo::driven_ports::TaskWriter for DbTaskWriter {
         Ok(())
     }
 
+    #[instrument(skip(self, ext_cxn))]
     async fn update_task(
         &self,
         task_id: i32,
