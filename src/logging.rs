@@ -1,13 +1,21 @@
 use crate::app_env;
+use axum::Router;
+use axum::body::Body;
+use axum::http::{Request, Response};
 use opentelemetry::trace::TracerProvider;
 use opentelemetry::{KeyValue, global};
+use opentelemetry_http::HeaderExtractor;
 use opentelemetry_otlp::{MetricExporter, SpanExporter, WithExportConfig};
 use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
 use opentelemetry_sdk::propagation::TraceContextPropagator;
 use opentelemetry_sdk::trace::Tracer;
 use opentelemetry_sdk::{Resource, runtime};
+use std::time::Duration;
+use tower::ServiceBuilder;
+use tower_http::trace::TraceLayer;
 use tracing::level_filters::LevelFilter;
-use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer};
+use tracing::{Span, debug, debug_span, field};
+use tracing_opentelemetry::{MetricsLayer, OpenTelemetryLayer, OpenTelemetrySpanExt};
 use tracing_subscriber::{EnvFilter, prelude::*, registry};
 
 /// The name of the service as it should appear in OpenTelemetry collectors
@@ -17,6 +25,38 @@ const SERVICE_NAME: &str = "sample-rest";
 pub struct OtelExporters {
     pub tracer: Tracer,
     pub meter: SdkMeterProvider,
+}
+
+/// Attaches a tracing middleware layer to the given router.
+pub fn attach_tracing_http<T>(router: Router<T>) -> Router<T>
+where
+    T: Clone + Send + Sync + 'static,
+{
+    router.layer(
+        ServiceBuilder::new().layer(
+            TraceLayer::new_for_http()
+                .make_span_with(|request: &Request<Body>| {
+                    let req_span = debug_span!(
+                        "request",
+                        method = &request.method().as_str(),
+                        path = request.uri().path(),
+                        response_status = field::Empty,
+                    );
+
+                    req_span.set_parent(global::get_text_map_propagator(|propagator| {
+                        propagator.extract(&HeaderExtractor(request.headers()))
+                    }));
+
+                    req_span
+                })
+                .on_response(
+                    |response: &Response<Body>, _latency: Duration, span: &Span| {
+                        span.record("response_status", field::display(response.status()));
+                        debug!("request processing complete");
+                    },
+                ),
+        ),
+    )
 }
 
 /// Instantiates OpenTelemetry exporters which run in the background and send tracing/logging/metrics

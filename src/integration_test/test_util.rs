@@ -29,7 +29,7 @@ async fn clear_old_dbs(db_base_url: &str) {
         Ok(results) => results.into_iter().map(|row| row.get::<String, _>(0)),
         Err(error) => {
             println!(
-                "Warning: failed to drop old test databases. You may );need to delete them manually. Error: {error}"
+                "Warning: failed to drop old test databases. You may need to delete them manually. Error: {error}"
             );
             return;
         }

@@ -582,8 +582,8 @@ pub fn player_routes() -> Router<Arc<SharedData>> {
             // We're using some axum extractors here to get the application state for the
             // ExternalConnectivity instance and the request body, which we're getting via
             // the Json extractor
-            post(|State(app_data): AppState, 
-                  Json(player_create): Json<dto::PlayerCreateRequest>| async move {
+            post(async |State(app_data): AppState, 
+                  Json(player_create): Json<dto::PlayerCreateRequest>| {
                 // In order to invoke the route logic, we need ExternalConnectivity and
                 // the business logic instance. We'll create both, then invoke the route logic.
                 let player_service = domain::player::PlayerService;

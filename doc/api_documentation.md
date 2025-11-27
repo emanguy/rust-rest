@@ -28,7 +28,7 @@ pub struct PlayerCreateRequest {
 }
 
 // Note the ToSchema derivation here
-#[derive(Debug Serialize, ToSchema)]
+#[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlayerCreateResponse {
     // This annotation provides the value for this field that will

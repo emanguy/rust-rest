@@ -1,18 +1,10 @@
 use axum::Router;
-use axum::body::Body;
 use axum::extract::State;
-use axum::http::{Request, Response};
 use dotenv::dotenv;
-use opentelemetry::global;
-use opentelemetry_http::HeaderExtractor;
 use std::env;
 use std::sync::Arc;
-use std::time::Duration;
 use tokio::net::TcpListener;
-use tower::ServiceBuilder;
-use tower_http::trace::TraceLayer;
 use tracing::*;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 mod api;
 mod app_env;
@@ -58,32 +50,8 @@ async fn main() {
         .nest("/tasks", api::todo::task_routes())
         .nest("/tracing-demo", api::tracing_prop::tracing_routes())
         .merge(api::swagger_main::build_documentation())
-        .layer(
-            ServiceBuilder::new().layer(
-                TraceLayer::new_for_http()
-                    .make_span_with(|request: &Request<Body>| {
-                        let req_span = debug_span!(
-                            "request",
-                            method = &request.method().as_str(),
-                            path = request.uri().path(),
-                            response_status = field::Empty,
-                        );
-
-                        req_span.set_parent(global::get_text_map_propagator(|propagator| {
-                            propagator.extract(&HeaderExtractor(request.headers()))
-                        }));
-
-                        req_span
-                    })
-                    .on_response(
-                        |response: &Response<Body>, _latency: Duration, span: &Span| {
-                            span.record("response_status", field::display(response.status()));
-                            debug!("request processing complete");
-                        },
-                    ),
-            ),
-        )
         .with_state(Arc::new(SharedData { ext_cxn }));
+    let router = logging::attach_tracing_http(router);
 
     info!("Starting server.");
     let network_listener = match TcpListener::bind(&"0.0.0.0:8080").await {

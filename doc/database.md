@@ -39,7 +39,7 @@ async fn create_player(
     //
     // with_transaction will also wrap errors returned from the domain in a custom error type that reports
     // issues with committing the transaction, so you'll need to handle for that too
-    let player_create_result = with_transaction(ext_cxn, |tx_cxn| async {
+    let player_create_result = with_transaction(ext_cxn, async |tx_cxn| {
         // tx_cxn is a mutable reference to an ExternalConnectivity instance with an initiated
         // database transaction. The transaction will be committed after the end of the lambda
         // if the lambda does not return Result::Err.
