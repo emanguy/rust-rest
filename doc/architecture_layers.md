@@ -152,20 +152,20 @@ Here's how we can define the driving port with a function for creating the new p
 // We'll define a module to group the driving port definition here
 pub mod driving_ports {
     use super::*;
-    use thiserror::Error;
+    use derive_more::{Display, Error, From};
     
     // Now that we have specific error cases we want to call out, we should define
     // an error specific to player creation. You may share these domain errors across multiple
     // functions, or compose re-usable error data structures across multiple error enums
     // to make your error definitions DRY (don't repeat yourself).
     
-    // We'll use the "thiserror" crate to make the error variants display human-readable
-    // error messages if need be.
-    #[derive(Debug, Error)]
+    // We'll use the "derive_more" crate to derive Display and Error for easy, readable
+    // error messages.
+    #[derive(Debug, Display, Error, From)]
     pub enum PlayerCreateError {
         // Because we can only validate if the username was taken by hitting the database,
         // we have to check username usage as part of the business logic
-        #[error("The given username was already taken")]
+        #[display("The given username was already taken")]
         UsernameTaken,
         
         // "Transparent" makes this error variant just display the error message from the wrapped error
@@ -173,8 +173,8 @@ pub mod driving_ports {
         //
         // Port errors encapsulate any other error that gets returned other than the ones we expect. These
         // might be database-specific errors or connectivity errors.
-        #[transparent]
-        PortError(#[from] anyhow::Error),
+        #[display("{}", _0)]
+        PortError(#[from] #[source] anyhow::Error),
     }
     
     // This trait is what the driving adapter will invoke to trigger the business logic

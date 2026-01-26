@@ -52,7 +52,7 @@ impl From<domain::user::TodoUser> for TodoUser {
 
 /// DTO for creating a new user via the API
 #[derive(Deserialize, Display, Validate, ToSchema)]
-#[display(fmt = "{} {}", "first_name", "last_name")]
+#[display("{} {}", first_name, last_name)]
 #[cfg_attr(test, derive(Serialize))]
 pub struct NewUser {
     #[validate(length(max = 30))]

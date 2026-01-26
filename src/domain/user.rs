@@ -1,5 +1,5 @@
 use crate::domain::user::driving_ports::CreateUserError;
-use crate::domain::Error;
+use derive_more::{Display, From};
 use crate::external_connections::ExternalConnectivity;
 use anyhow::Context;
 
@@ -77,14 +77,16 @@ pub struct CreateUser {
 pub mod driving_ports {
     use super::*;
     use crate::external_connections::ExternalConnectivity;
+    use crate::domain::Error;
+    use derive_more::{Display, From};
 
-    #[derive(Debug, Error)]
+    #[derive(Debug, Display, Error, From)]
     /// Defines the set of reasons why a user would fail to be created
     pub enum CreateUserError {
-        #[error("The provided user already exists.")]
+        #[display("The provided user already exists.")]
         UserAlreadyExists,
-        #[error(transparent)]
-        PortError(#[from] anyhow::Error),
+        #[display("{}", _0)]
+        PortError(#[from] #[error(source)] anyhow::Error),
     }
 
     /// The driving port which exposes business logic involving users to driving adapters
@@ -128,13 +130,13 @@ pub mod driving_ports {
 /// Implementation of the driving port which allows driving adapters to access user business logic
 pub struct UserService;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Display, From)]
 /// Error which expresses problems that may occur when asserting a user exists
 pub(super) enum UserExistsErr {
-    #[error("user with ID {0} does not exist")]
+    #[display("user with ID {} does not exist", _0)]
     UserDoesNotExist(i32),
 
-    #[error(transparent)]
+    #[display("{}", _0)]
     PortError(#[from] anyhow::Error),
 }
 

@@ -2,7 +2,7 @@ use sqlx::PgConnection;
 
 use std::fmt::{Debug, Display};
 use std::future::Future;
-use thiserror::Error;
+use derive_more::{Display as DeriveDisplay, Error};
 
 /// TransactableExternalConnectivity represents an [ExternalConnectivity] that can initiate
 /// a database transaction
@@ -52,31 +52,32 @@ pub trait TransactionHandle: Sync {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Error)]
+#[derive(Debug, DeriveDisplay, Error)]
 /// This error reports issues that occur during database transactions, allowing the
 /// original result of a [with_transaction]'s lambda to be retrieved even if the transaction
 /// commit fails.
 pub enum TxOrSourceError<SourceValue, SourceErr, TxBeginErr, TxCommitErr>
 where
-    SourceErr: Debug + Display,
-    TxBeginErr: Debug + Display,
-    TxCommitErr: Debug + Display,
+    SourceErr: std::error::Error,
+    TxBeginErr: std::error::Error,
+    TxCommitErr: std::error::Error,
 {
-    #[error(transparent)]
+    #[display("{}", _0)]
     /// Represents that the lambda failed, returning the error from the lambda
-    Source(SourceErr),
+    Source(#[error(source)] SourceErr),
 
-    #[error("Failed to start the transaction: {0}")]
+    #[display("Failed to start the transaction: {}", _0)]
     /// Represents that the database failed to start the transaction, and the lambda did not execute.
     TxBegin(TxBeginErr),
 
-    #[error("Got a successful result, but the database transaction failed: {transaction_err}")]
+    #[display("Got a successful result, but the database transaction failed: {transaction_err}")]
     /// Represents that the lambda executed successfully, but the database transaction failed to commit.
     /// The original result of the lambda is provided in this error.
     TxCommit {
         /// The success value returned from the lambda
         successful_result: SourceValue,
         /// The database error that occurred when the commit failed
+        #[error(source)]
         transaction_err: TxCommitErr,
     },
 }
@@ -100,12 +101,12 @@ pub async fn with_transaction<'tx, TxAble, ErrBegin, Handle, ErrCommit, Fn, Fut,
 ) -> Result<Ret, TxOrSourceError<Ret, ErrSource, TxAble::Error, Handle::Error>>
 where
     TxAble: Transactable<Handle<'tx> = Handle, Error = ErrBegin>,
-    ErrBegin: Debug + Display,
+    ErrBegin: std::error::Error,
     Handle: TransactionHandle<Error = ErrCommit>,
-    ErrCommit: Debug + Display,
+    ErrCommit: std::error::Error,
     Fn: FnOnce(&mut Handle) -> Fut,
     Fut: Future<Output = Result<Ret, ErrSource>>,
-    ErrSource: Debug + Display,
+    ErrSource: std::error::Error,
 {
     let mut tx_handle = tx_origin
         .start_transaction()
@@ -132,11 +133,11 @@ where
 mod with_transaction_test {
     use super::*;
     use speculoos::prelude::*;
-    use thiserror::Error;
+    use derive_more::{Display as DeriveDisplay, Error};
 
     // I need this to help provide a size for the error in the async block used in the following test
-    #[derive(Debug, Error)]
-    #[error("Abcde")]
+    #[derive(Debug, DeriveDisplay, Error)]
+    #[display("Abcde")]
     struct SampleErr;
 
     #[tokio::test]

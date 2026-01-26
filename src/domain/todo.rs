@@ -82,15 +82,15 @@ pub mod driving_ports {
     use super::*;
     use crate::domain;
     use crate::external_connections::ExternalConnectivity;
-    use thiserror::Error;
+    use derive_more::{Display, Error, From};
 
-    #[derive(Debug, Error)]
+    #[derive(Debug, Display, Error, From)]
     /// A set of things that can go wrong while dealing with tasks
     pub enum TaskError {
-        #[error("The specified user did not exist.")]
+        #[display("The specified user did not exist.")]
         UserDoesNotExist,
-        #[error(transparent)]
-        PortError(#[from] anyhow::Error),
+        #[display("{}", _0)]
+        PortError(#[from] #[error(source)] anyhow::Error),
     }
 
     impl From<domain::user::UserExistsErr> for TaskError {
