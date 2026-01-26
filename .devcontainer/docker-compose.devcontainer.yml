@@ -1,0 +1,12 @@
+version: "3.0"
+
+services:
+  development:
+    image: ghcr.io/emanguy/rust-ci:1.75-v1.1.0
+    command: /bin/sh -c "while sleep 1000; do :; done"
+    volumes:
+      - ..:/workspace:cached
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
