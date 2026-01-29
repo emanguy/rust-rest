@@ -40,4 +40,3 @@ jobs:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
           base_branch: main-v2
           allowed_mcp_servers: "mcp_github_checks_server,mcp_github_inline_comment_server"
-          resolve_conflicts: true
