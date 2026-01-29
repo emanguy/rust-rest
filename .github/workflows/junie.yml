@@ -33,4 +33,4 @@ jobs:
         uses: JetBrains/junie-github-action@v0
         with:
           junie_api_key: ${{ secrets.JUNIE_API_KEY }}
-          base_branch: main_v2
+          base_branch: main-v2
